@@ -6,7 +6,7 @@ import { useLeague } from "@/lib/useLeague";
 import { cancelGame, cerrarPartida, finalStandings, GAME_COLORS, heal, hit, newGame, syncGame, type Game, type Seat } from "@/lib/partidas";
 import type { JornadaKind } from "@/lib/types";
 import { playerLabel } from "@/lib/history";
-import { Starred } from "@/components/Status";
+import { esCampeon, Starred } from "@/components/Status";
 import { MeterLlave, QuienApunta } from "@/components/Llave";
 import { usePermiso } from "@/lib/llave";
 
@@ -114,10 +114,12 @@ function fitName(name: string, maxCqmin: number, widthCqw = 84) {
 
 function FitName({ name, max, className = "" }: { name: string; max: number; className?: string }) {
   const { lines, fontSize } = fitName(name, max);
+  // El nombre se parte en líneas: el dorado del campeón se decide con el nombre entero
+  const oro = esCampeon(name);
   return (
-    <span className={`block text-center font-semibold leading-[1.05] ${className}`} style={{ fontSize }}>
+    <span className={`block text-center font-semibold leading-[1.05] ${oro ? "[&_.text-gold]:text-[#ffd75e] [&_.text-gold]:[text-shadow:0_1px_2px_rgba(0,0,0,.85),0_0_14px_rgba(0,0,0,.55)]" : ""} ${className}`} style={{ fontSize }}>
       {lines.map((l) => (
-        <span key={l} className="block whitespace-nowrap"><Starred name={l} /></span>
+        <span key={l} className="block whitespace-nowrap"><Starred name={l} oro={oro} /></span>
       ))}
     </span>
   );

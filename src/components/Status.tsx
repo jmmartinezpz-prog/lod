@@ -34,17 +34,25 @@ export function Stars({ n, campeon = false }: { n: number; campeon?: boolean }) 
   );
 }
 
-// El campeón vigente va en dorado. Se rellena al cargar la liga, para los nombres que llegan como texto.
+// El campeón vigente va en dorado. Se rellena al cargar la liga, para los nombres que llegan como texto,
+// y se recuerda en el móvil para el modo juego (que puede abrirse sin cargar la liga).
+const CAMPEONES_KEY = "lod-campeones";
 let campeones: string[] = [];
+try {
+  if (typeof window !== "undefined") campeones = JSON.parse(localStorage.getItem(CAMPEONES_KEY) ?? "[]");
+} catch {}
 export function marcarCampeones(nicknames: string[]) {
   campeones = nicknames;
+  try {
+    localStorage.setItem(CAMPEONES_KEY, JSON.stringify(nicknames));
+  } catch {}
 }
+export const esCampeon = (name: string) => campeones.some((c) => name.includes(c));
 
 // Para nombres que ya vienen en texto ("Adolf Victimilla ★★"): pinta las estrellas pequeñas
-export function Starred({ name }: { name: string }) {
+export function Starred({ name, oro = esCampeon(name) }: { name: string; oro?: boolean }) {
   const m = name.match(/^(.*?)\s*(★+)$/);
   const texto = m ? m[1] : name;
-  const oro = campeones.some((c) => texto.includes(c));
   return (
     <>
       {oro ? <span className="font-semibold text-gold">{texto}</span> : texto}
