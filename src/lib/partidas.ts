@@ -198,13 +198,16 @@ export async function syncGame(g: Game): Promise<{ header: boolean; sent: string
       .from("partidas")
       .upsert({ id: g.id, started_at: g.startedAt, ended_at: g.endedAt, start_lives: g.start, kind: g.kind });
     if (p.error) return { header: false, sent: [], error: p.error.message };
+    // Jugadores y movimientos no cambian nunca una vez subidos: si ya están, se dejan como están
+    // (recolocar las cartas a mitad de partida no debe tocarlos; las reglas antitrampa lo impedirían)
     const j = await supabase.from("partida_jugadores").upsert(
       g.seats.map((s, i) => ({ id: s.id, partida_id: g.id, player_id: s.playerId, name: s.name, color: s.color, seat: i })),
+      { onConflict: "id", ignoreDuplicates: true },
     );
     if (j.error) return { header: false, sent: [], error: j.error.message };
   }
   if (g.pending.length) {
-    const m = await supabase.from("partida_movimientos").upsert(g.pending);
+    const m = await supabase.from("partida_movimientos").upsert(g.pending, { onConflict: "id", ignoreDuplicates: true });
     if (m.error) return { header: true, sent: [], error: m.error.message };
   }
   return { header: true, sent: g.pending.map((m) => m.id), error: null };
