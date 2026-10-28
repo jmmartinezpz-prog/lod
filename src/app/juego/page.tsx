@@ -5,6 +5,8 @@ import { Status } from "@/components/Status";
 import { useLeague } from "@/lib/useLeague";
 import { finalStandings, heal, hit, newGame, PALETTE as COLORS, syncGame, type Game, type Seat } from "@/lib/partidas";
 import type { JornadaKind } from "@/lib/types";
+import { playerLabel } from "@/lib/history";
+import { Starred } from "@/components/Status";
 
 const NORMAL = 6;
 const SOBRANTES = 8;
@@ -41,7 +43,7 @@ function FitName({ name, max, className = "" }: { name: string; max: number; cla
   return (
     <span className={`block text-center font-semibold leading-[1.05] ${className}`} style={{ fontSize }}>
       {lines.map((l) => (
-        <span key={l} className="block whitespace-nowrap">{l}</span>
+        <span key={l} className="block whitespace-nowrap"><Starred name={l} /></span>
       ))}
     </span>
   );
@@ -105,7 +107,7 @@ function Summary({ game, onClose }: { game: Game; onClose: () => void }) {
             <li key={r.id} className="flex items-center gap-3 rounded-2xl p-3 text-white" style={{ background: tileBg(r.color) }}>
               <span className="w-8 text-center text-2xl">{medal[r.place - 1] ?? `${r.place}º`}</span>
               <span className="flex-1 text-lg font-semibold leading-tight [text-shadow:0_1px_4px_rgba(0,0,0,.4)]">
-                {r.name}
+                <Starred name={r.name} />
                 <span className="block text-xs font-medium opacity-85">
                   {r.lives < 0 ? "💀 BUST" : r.lives === 0 ? "vida cero" : `${r.lives} ${r.lives === 1 ? "vida" : "vidas"}`}
                 </span>
@@ -137,7 +139,7 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   const regulars = players
     .filter((p) => p.active && !p.is_wildcard)
     .sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99) || a.nickname.localeCompare(b.nickname))
-    .map((p) => ({ id: p.id, name: `${p.emoji ? `${p.emoji} ` : ""}${p.nickname}` }));
+    .map((p) => ({ id: p.id, name: playerLabel(p) }));
   const candidates = [...regulars, ...wildcards];
   const color = (id: string) => colorOf[id] ?? COLORS[candidates.findIndex((c) => c.id === id) % COLORS.length];
   const seated = candidates.filter((c) => !excluded.has(c.id));

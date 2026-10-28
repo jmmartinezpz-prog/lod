@@ -1,5 +1,6 @@
 "use client";
 
+import { Starred } from "@/components/Status";
 import { useState } from "react";
 import { short, useWidth } from "./LivesChart";
 import type { LeagueHistory } from "@/lib/history";
@@ -80,7 +81,7 @@ export function ProgressChart({ history, focus, onFocus }: {
             } ${focus === s.key ? "bg-felt text-ink" : "text-muted"}`}
           >
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
-            {s.name}
+            <Starred name={s.name} />
           </button>
         ))}
       </div>
@@ -146,7 +147,7 @@ export function ProgressChart({ history, focus, onFocus }: {
             {tip.map(({ s, v, pts }, i) => (
               <p key={s.key} className="flex items-center gap-1.5">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
-                <span className="flex-1 leading-tight">{s.name}</span>
+                <span className="flex-1 leading-tight"><Starred name={s.name} /></span>
                 <span className="tabular font-bold">
                   {mode === "puntos" ? pts : v === 0 ? "líder" : v}
                   {mode === "puntos" && i === 0 && hover > 0 ? " 👑" : ""}

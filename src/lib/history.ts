@@ -26,7 +26,7 @@ export type Leadership = {
 };
 
 export type LeagueHistory = {
-  series: { key: string; name: string; color: string }[];
+  series: { key: string; name: string; color: string; campeon: boolean; mundiales: number }[];
   snapshots: Snapshot[];
   leadership: Map<string, Leadership>;
   jornadas: number; // en el periodo
@@ -38,7 +38,8 @@ export const regularsOf = (players: Player[]) =>
     .filter((p) => p.active && !p.is_wildcard)
     .sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99) || a.nickname.localeCompare(b.nickname));
 
-export const playerLabel = (p: Player) => `${p.emoji ? `${p.emoji} ` : ""}${p.nickname}`;
+export const stars = (p: Pick<Player, "mundiales">) => "★".repeat(p.mundiales ?? 0);
+export const playerLabel = (p: Player) => `${p.emoji ? `${p.emoji} ` : ""}${p.nickname}${p.mundiales ? ` ${stars(p)}` : ""}`;
 
 // Calcula liderato, farolillo y puestos sobre un tramo de snapshots (sin la salida)
 function leadershipOf(keys: string[], tramo: Snapshot[]): Map<string, Leadership> {
@@ -133,7 +134,9 @@ export function leagueHistory(
 
   const tramo = snapshots.slice(1);
   return {
-    series: regulars.map((p, i) => ({ key: p.id, name: playerLabel(p), color: PALETTE[i % PALETTE.length] })),
+    series: regulars.map((p, i) => ({
+      key: p.id, name: playerLabel(p), color: PALETTE[i % PALETTE.length], campeon: Boolean(p.campeon), mundiales: p.mundiales ?? 0,
+    })),
     snapshots,
     leadership: leadershipOf(keys, tramo),
     jornadas: tramo.length,

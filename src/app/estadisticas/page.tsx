@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Status } from "@/components/Status";
+import { Starred, Status } from "@/components/Status";
 import { LivesChart } from "@/components/LivesChart";
 import { ProgressChart } from "@/components/ProgressChart";
 import { historyIn, leagueHistory, regularsOf } from "@/lib/history";
@@ -188,7 +188,7 @@ export default function Estadisticas() {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {live.seats.map((s) => (
               <div key={s.id} className="rounded-xl p-3 text-white [text-shadow:0_1px_3px_rgba(0,0,0,.4)]" style={{ background: s.lives < 0 ? "#1b1b1b" : s.color }}>
-                <p className="text-sm font-semibold leading-tight">{s.name}</p>
+                <p className="text-sm font-semibold leading-tight"><Starred name={s.name} /></p>
                 {s.lives < 0 ? (
                   <p className="text-2xl font-extrabold text-[#ff4040]">💀 BUST!</p>
                 ) : (
@@ -276,10 +276,10 @@ export default function Estadisticas() {
             {pairs.slice(0, 12).map((p) => (
               <li key={`${p.from.key}>${p.to.key}`} className="flex items-center gap-2 rounded-lg bg-felt px-3 py-2 text-sm">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.from.color }} />
-                <span className="flex-1 leading-tight">{p.from.name}</span>
+                <span className="flex-1 leading-tight"><Starred name={p.from.name} /></span>
                 <span className="text-muted">→</span>
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.to.color }} />
-                <span className="flex-1 leading-tight">{p.to.name}</span>
+                <span className="flex-1 leading-tight"><Starred name={p.to.name} /></span>
                 <span className="tabular w-8 text-right font-bold">{p.n}</span>
               </li>
             ))}
@@ -368,7 +368,7 @@ function Name({ s, className = "" }: { s: PlayerStats; className?: string }) {
   return (
     <span className={`flex min-w-0 items-center gap-1.5 text-sm ${className}`}>
       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
-      <span className="leading-tight [overflow-wrap:anywhere]">{s.name}</span>
+      <span className="leading-tight [overflow-wrap:anywhere]"><Starred name={s.name} /></span>
     </span>
   );
 }
@@ -381,7 +381,7 @@ function Eliminaciones({ r }: { r: Resumen }) {
         <li key={s.id} className="flex items-center gap-2 rounded-lg bg-felt px-3 py-1.5">
           <span className="tabular w-6 font-bold text-muted">{s.place}º</span>
           <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
-          <span className="flex-1 leading-tight">{s.name}</span>
+          <span className="flex-1 leading-tight"><Starred name={s.name} /></span>
           <span className="tabular shrink-0 text-right text-xs text-muted">
             {s.outAt
               ? `💀 BUST min ${Math.floor((s.outAt - r.startAt) / 60_000)}${s.place === n ? " · 1º en caer" : ""}`
@@ -562,16 +562,18 @@ function Individual({ history, stats, standings, focus, onFocus }: {
             }`}
           >
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
-            {s.name}
+            <Starred name={s.name} />
           </button>
         ))}
       </div>
 
       <div className="mb-4 flex flex-wrap items-end gap-x-6 gap-y-2 rounded-2xl p-4" style={{ background: `color-mix(in srgb, ${who.color} 22%, var(--felt))` }}>
         <div className="min-w-0 flex-1">
-          <p className="text-2xl font-bold leading-tight">{who.name}</p>
+          <p className="text-2xl font-bold leading-tight"><Starred name={who.name} /></p>
           <p className="text-sm text-muted">
             {pos === 0 ? "👑 Líder de la liga" : ahead ? `${pos + 1}º · a ${ahead.points - pts} del ${pos}º` : `${pos + 1}º`}
+            {who.campeon && " · 🌍 Campeón del mundo vigente"}
+            {who.mundiales > 0 && ` · ${who.mundiales} ${who.mundiales === 1 ? "mundial" : "mundiales"}`}
           </p>
         </div>
         <p className="text-right">

@@ -85,7 +85,7 @@ export default function Clasificacion() {
                     <div className="min-w-0 flex-1">
                       <p className="flex items-center gap-2 text-lg font-semibold leading-tight">
                         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color.get(s.player.id) }} />
-                        <PlayerName nickname={s.player.nickname} emoji={s.player.emoji} />
+                        <PlayerName nickname={s.player.nickname} emoji={s.player.emoji} mundiales={s.player.mundiales} campeon={s.player.campeon} />
                       </p>
                       <p className="mt-1 text-xs text-muted">
                         {i === 0 ? (

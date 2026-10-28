@@ -1,7 +1,7 @@
 import type { Movimiento, Partida, PartidaJugador } from "./partidas";
 import { PALETTE, pointsFor } from "./partidas";
 import type { Jornada, LeagueEvent, Player, Result } from "./types";
-import type { LeagueHistory, Leadership } from "./history";
+import { playerLabel, type LeagueHistory, type Leadership } from "./history";
 
 // Una partida sin movimientos desde hace tanto se da por terminada
 const LIVE_WINDOW = 3 * 60 * 60 * 1000;
@@ -175,7 +175,7 @@ export function playerStats(opts: {
   const regulars = players
     .filter((p) => p.active && !p.is_wildcard)
     .sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99) || a.nickname.localeCompare(b.nickname));
-  const label = (p: Player) => `${p.emoji ? `${p.emoji} ` : ""}${p.nickname}`;
+  const label = playerLabel;
 
   const jornadaById = new Map(jornadas.filter((j) => inRange(j.played_on, range)).map((j) => [j.id, j]));
   const jornadaDay = new Map(jornadas.map((j) => [j.id, j.played_on as string | null]));

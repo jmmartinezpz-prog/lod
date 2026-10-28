@@ -1,5 +1,6 @@
 "use client";
 
+import { Starred } from "@/components/Status";
 import { useEffect, useRef, useState } from "react";
 import { livesAt, type Resumen } from "@/lib/stats";
 
@@ -78,7 +79,7 @@ export function LivesChart({ r }: { r: Resumen }) {
         {r.seats.map((s) => (
           <li key={s.id} className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
-            {s.name}
+            <Starred name={s.name} />
           </li>
         ))}
       </ul>
@@ -144,7 +145,7 @@ export function LivesChart({ r }: { r: Resumen }) {
             {tip.map(({ s, v }) => (
               <p key={s.id} className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
-                <span className="flex-1 leading-tight">{s.name}</span>
+                <span className="flex-1 leading-tight"><Starred name={s.name} /></span>
                 <span className="tabular font-bold">{v < 0 ? "💀" : v}</span>
               </p>
             ))}

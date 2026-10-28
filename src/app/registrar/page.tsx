@@ -153,7 +153,7 @@ function Form() {
                 } ${p.is_wildcard ? "border-dashed" : ""}`}
               >
                 {pos >= 0 && `${pos + 1}º · `}
-                <PlayerName nickname={p.nickname} emoji={p.emoji} />
+                <PlayerName nickname={p.nickname} emoji={p.emoji} mundiales={p.mundiales} campeon={p.campeon} />
               </button>
             );
           })}

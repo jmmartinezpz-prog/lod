@@ -5,6 +5,8 @@ export type Player = {
   is_wildcard: boolean;
   active: boolean;
   seat_order: number | null;
+  mundiales?: number; // estrellas junto al nombre (07_mundiales.sql)
+  campeon?: boolean; // campeón del mundo vigente
 };
 
 export type JornadaKind = "normal" | "sobrante";

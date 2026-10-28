@@ -111,7 +111,7 @@ export default function Jornadas() {
                             <li key={r.id} className={`flex gap-2 ${p?.is_wildcard ? "text-muted" : ""}`}>
                               <span className="tabular w-5 text-muted">{r.position}.</span>
                               <span className="flex-1">
-                                {p && <PlayerName nickname={p.nickname} emoji={p.emoji} />}
+                                {p && <PlayerName nickname={p.nickname} emoji={p.emoji} mundiales={p.mundiales} campeon={p.campeon} />}
                                 {p?.is_wildcard && <span className="text-xs"> (wildcard)</span>}
                               </span>
                               <span className="tabular font-semibold">+{r.points}</span>
