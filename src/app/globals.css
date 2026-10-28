@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+:root {
+  --felt: #0d2b22;
+  --felt-2: #123a2e;
+  --card: #163f33;
+  --line: #26574a;
+  --ink: #f2ede1;
+  --muted: #9fb8ad;
+  --gold: #e2b84b;
+  --red: #e0645a;
+}
+
+@theme inline {
+  --color-felt: var(--felt);
+  --color-felt-2: var(--felt-2);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-gold: var(--gold);
+  --color-red: var(--red);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background: radial-gradient(ellipse at top, var(--felt-2), var(--felt) 70%) fixed;
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+input, select, textarea {
+  background: var(--felt);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--ink);
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
