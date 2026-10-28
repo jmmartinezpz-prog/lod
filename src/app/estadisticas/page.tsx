@@ -230,7 +230,7 @@ export default function Estadisticas() {
         </Card>
 
         <Puestos stats={stats} />
-        <CaraACara finales={fin} />
+        <CaraACara finales={fin} yo={permiso.jugador} />
         <Card title="🎲 Liga (jornadas registradas)">
           <Table
             stats={stats.filter((s) => s.jornadas > 0).sort((a, b) => b.ligaPts - a.ligaPts)}
@@ -265,7 +265,7 @@ export default function Estadisticas() {
           history={periodo}
           stats={stats}
           standings={league.standings.map((s) => ({ key: s.player.id, points: s.points }))}
-          focus={focus ?? league.standings[0]?.player.id ?? null}
+          focus={focus ?? permiso.jugador ?? league.standings[0]?.player.id ?? null}
           onFocus={setFocus}
           sanciones={sanciones}
           finales={fin}
@@ -804,12 +804,48 @@ function Puestos({ stats }: { stats: PlayerStats[] }) {
 }
 
 // Finales = jornadas en las que los dos se jugaron la victoria (1º y 2º)
-function CaraACara({ finales }: { finales: Final[] }) {
+function CaraACara({ finales, yo }: { finales: Final[]; yo: string | null }) {
+  const [elegido, setElegido] = useState<string | null>(null);
   if (!finales.length) return null;
+
+  // Jugadores con alguna final, de más a menos finales jugadas
+  const jugadores = new Map<string, { s: PlayerStats; n: number }>();
+  for (const f of finales)
+    for (const s of [f.a, f.b]) jugadores.set(s.key, { s, n: (jugadores.get(s.key)?.n ?? 0) + f.total });
+  const lista = [...jugadores.values()].sort((a, b) => b.n - a.n);
+  // Por defecto, las finales de quien tiene la llave de este móvil
+  const sel = elegido ?? (yo && jugadores.has(yo) ? yo : "todos");
+
+  // Con un jugador elegido, siempre a la izquierda
+  const vista = sel === "todos"
+    ? finales
+    : finales
+        .filter((f) => f.a.key === sel || f.b.key === sel)
+        .map((f) => (f.a.key === sel ? f : { ...f, a: f.b, b: f.a, aWins: f.bWins, bWins: f.aWins }));
+  const ganadas = vista.reduce((t, f) => t + f.aWins, 0);
+  const jugadas = vista.reduce((t, f) => t + f.total, 0);
+
   return (
     <Card title="🤺 Cara a cara en finales">
+      <div className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-1">
+        {[{ key: "todos", name: "Todos" }, ...lista.map(({ s }) => ({ key: s.key, name: s.name }))].map((o) => (
+          <button
+            key={o.key}
+            onClick={() => setElegido(o.key)}
+            className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${sel === o.key ? "bg-gold text-felt" : "border border-line text-muted"}`}
+          >
+            {o.key === "todos" ? o.name : <Starred name={o.name} />}
+            {o.key === yo && " · tú"}
+          </button>
+        ))}
+      </div>
+      {sel !== "todos" && (
+        <p className="mb-3 text-sm text-muted">
+          {jugadas} {jugadas === 1 ? "final" : "finales"} · <b className="text-ink">{ganadas} ganadas</b> · {jugadas - ganadas} perdidas
+        </p>
+      )}
       <ul className="grid gap-2 lg:grid-cols-2">
-        {finales.map((f) => (
+        {vista.map((f) => (
           <li key={`${f.a.key}|${f.b.key}`} className="rounded-xl bg-felt p-3">
             <div className="flex items-center gap-2 text-sm">
               <span className={`flex-1 leading-tight ${f.aWins > f.bWins ? "font-bold" : "text-muted"}`}><Starred name={f.a.name} /></span>

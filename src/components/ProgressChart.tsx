@@ -65,7 +65,7 @@ export function ProgressChart({ history, focus, onFocus }: {
   useEffect(() => {
     const el = scroller.current;
     if (el) el.scrollLeft = el.scrollWidth;
-  }, [fullW, mode]);
+  }, [fullW, width, mode]);
 
   if (snapshots.length < 2) return <p className="py-6 text-center text-sm text-muted">Aún no hay jornadas registradas.</p>;
 

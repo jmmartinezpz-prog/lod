@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import AdminGate from "@/components/AdminGate";
 import { usePermiso } from "@/lib/llave";
 import { usePartidas } from "@/lib/partidas";
+import { useLeague } from "@/lib/useLeague";
+import { useSession } from "@/lib/useSession";
 import { supabase } from "@/lib/supabase";
 
-type Llave = { id: string; nombre: string; activa: boolean; created_at: string; ultimo_uso: string | null };
+type Llave = { id: string; nombre: string; activa: boolean; created_at: string; ultimo_uso: string | null; player_id: string | null };
 type Entrada = {
   id: number;
   cuando: string;
@@ -50,6 +52,7 @@ function Panel() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">🛡 Seguridad</h1>
+      <Yo jugador={permiso.jugador} onCambio={permiso.recargar} />
       <Llaves />
       <Anuladas />
       <Registro />
@@ -57,14 +60,44 @@ function Panel() {
   );
 }
 
+// Jugadores de la liga para unir a cada llave (los wildcards no)
+function useFijos() {
+  const { players } = useLeague();
+  return players.filter((p) => !p.is_wildcard).sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99));
+}
+
+function Yo({ jugador, onCambio }: { jugador: string | null; onCambio: () => void }) {
+  const fijos = useFijos();
+  const { session } = useSession();
+  async function elegir(id: string) {
+    if (!session) return;
+    const { error } = await supabase.from("admins").update({ player_id: id || null }).eq("user_id", session.user.id);
+    if (error) alert(error.message);
+    onCambio();
+  }
+  return (
+    <section className="flex items-center gap-3 rounded-2xl border border-line bg-card p-4">
+      <span className="text-sm">👤 Tú eres</span>
+      <select value={jugador ?? ""} onChange={(e) => elegir(e.target.value)} className="!w-auto flex-1">
+        <option value="">—</option>
+        {fijos.map((p) => (
+          <option key={p.id} value={p.id}>{p.nickname}</option>
+        ))}
+      </select>
+    </section>
+  );
+}
+
 function Llaves() {
+  const fijos = useFijos();
   const [llaves, setLlaves] = useState<Llave[]>([]);
   const [nombre, setNombre] = useState("");
+  const [jugador, setJugador] = useState("");
   const [nueva, setNueva] = useState<{ nombre: string; code: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from("llaves").select("id, nombre, activa, created_at, ultimo_uso").order("created_at");
+    const { data, error } = await supabase.from("llaves").select("id, nombre, activa, created_at, ultimo_uso, player_id").order("created_at");
     setError(error?.message ?? null);
     setLlaves(data ?? []);
   }, []);
@@ -74,12 +107,19 @@ function Llaves() {
   }, [load]);
 
   async function crear() {
-    const n = nombre.trim();
+    const n = nombre.trim() || fijos.find((p) => p.id === jugador)?.nickname || "";
     if (!n) return;
-    const { data, error } = await supabase.rpc("crear_llave", { p_nombre: n });
+    const { data, error } = await supabase.rpc("crear_llave", { p_nombre: n, p_player: jugador || null });
     if (error) return setError(error.message);
     setNueva({ nombre: n, code: data as string });
     setNombre("");
+    setJugador("");
+    load();
+  }
+
+  async function unir(l: Llave, player_id: string) {
+    const { error } = await supabase.from("llaves").update({ player_id: player_id || null }).eq("id", l.id);
+    if (error) setError(error.message);
     load();
   }
 
@@ -108,9 +148,15 @@ function Llaves() {
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+        <select value={jugador} onChange={(e) => setJugador(e.target.value)}>
+          <option value="">Jugador de la liga…</option>
+          {fijos.map((p) => (
+            <option key={p.id} value={p.id}>{p.nickname}</option>
+          ))}
+        </select>
         <input value={nombre} onChange={(e) => setNombre(e.target.value)} onKeyDown={(e) => e.key === "Enter" && crear()} placeholder="Nombre (p. ej. Vilanova)" />
-        <button onClick={crear} disabled={!nombre.trim()} className="whitespace-nowrap rounded-lg bg-gold px-4 font-semibold text-felt disabled:opacity-40">
+        <button onClick={crear} disabled={!nombre.trim() && !jugador} className="whitespace-nowrap rounded-lg bg-gold px-4 py-2 font-semibold text-felt disabled:opacity-40">
           Crear llave
         </button>
       </div>
@@ -123,6 +169,12 @@ function Llaves() {
               <span className="font-semibold">{l.nombre}</span>
               <span className="block text-xs text-muted">último uso: {cuando(l.ultimo_uso)}</span>
             </span>
+            <select value={l.player_id ?? ""} onChange={(e) => unir(l, e.target.value)} className="!w-auto max-w-32 !py-1 text-xs" aria-label={`Jugador de ${l.nombre}`}>
+              <option value="">¿Quién es?</option>
+              {fijos.map((p) => (
+                <option key={p.id} value={p.id}>{p.nickname}</option>
+              ))}
+            </select>
             <button onClick={() => cambiar(l)} className={`rounded-full px-3 py-1 text-xs ${l.activa ? "border border-red/50 text-red" : "border border-line text-muted"}`}>
               {l.activa ? "Revocar" : "Reactivar"}
             </button>

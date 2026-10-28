@@ -8,6 +8,7 @@ export type Permiso = {
   puede: boolean; // puede apuntar partidas, subir periódicos, anular…
   nombre: string | null; // de quién es la llave de este móvil
   admin: boolean;
+  jugador: string | null; // jugador de la liga de este móvil (16_llave_jugador.sql)
   sinSistema: boolean; // aún no se ha ejecutado 12_seguridad.sql: todo sigue abierto
 };
 
@@ -31,14 +32,14 @@ export function guardarLlave(code: string | null) {
 }
 
 export function usePermiso(): Permiso & { recargar: () => void } {
-  const [p, setP] = useState<Permiso>({ cargando: true, puede: false, nombre: null, admin: false, sinSistema: false });
+  const [p, setP] = useState<Permiso>({ cargando: true, puede: false, nombre: null, admin: false, jugador: null, sinSistema: false });
 
   const recargar = useCallback(async () => {
-    if (!supabaseConfigured) return setP({ cargando: false, puede: false, nombre: null, admin: false, sinSistema: true });
+    if (!supabaseConfigured) return setP({ cargando: false, puede: false, nombre: null, admin: false, jugador: null, sinSistema: true });
     const { data, error } = await supabase.rpc("quien_soy");
-    if (error) return setP({ cargando: false, puede: true, nombre: null, admin: false, sinSistema: true });
-    const d = data as { admin: boolean; llave: string | null };
-    setP({ cargando: false, puede: d.admin || Boolean(d.llave), nombre: d.llave, admin: d.admin, sinSistema: false });
+    if (error) return setP({ cargando: false, puede: true, nombre: null, admin: false, jugador: null, sinSistema: true });
+    const d = data as { admin: boolean; llave: string | null; jugador?: string | null };
+    setP({ cargando: false, puede: d.admin || Boolean(d.llave), nombre: d.llave, admin: d.admin, jugador: d.jugador ?? null, sinSistema: false });
   }, []);
 
   useEffect(() => {
