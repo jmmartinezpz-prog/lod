@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Status } from "@/components/Status";
 import { useLeague } from "@/lib/useLeague";
-import { cancelGame, cerrarPartida, coloresDeLiga, finalStandings, GAME_COLORS, heal, hit, newGame, syncGame, type Game, type Seat } from "@/lib/partidas";
+import { cancelGame, cerrarPartida, coloresDeLiga, marcar, tocaTipo, type Marca, finalStandings, GAME_COLORS, heal, hit, newGame, syncGame, type Game, type Seat } from "@/lib/partidas";
 import type { JornadaKind } from "@/lib/types";
 import { playerLabel } from "@/lib/history";
 import { esCampeon, Starred } from "@/components/Status";
@@ -150,6 +150,7 @@ export default function Juego() {
           bustOrder: saved.bustOrder ?? [],
           secadas: saved.secadas ?? {},
           tiradas: saved.tiradas ?? {},
+          marcas: saved.marcas ?? {},
           pending: saved.pending.map((m: Game["pending"][number]) => ({ ...m, kind: m.kind ?? "vida", from_jugador_id: m.from_jugador_id ?? null })),
         });
     } catch {}
@@ -196,6 +197,11 @@ function Summary({ game, liga, onRetry, onSalir, onOtra }: {
   onOtra: (kind: JornadaKind) => void;
 }) {
   const [eligiendo, setEligiendo] = useState(false); // otra partida: ¿normal o sobrantes?
+  const { jornadas } = useLeague();
+  // Lo que toca ahora, contando la que se acaba de guardar aunque aún no haya llegado a la liga
+  const kinds = jornadas.toSorted((a, b) => a.number - b.number).map((j) => j.kind);
+  if (liga?.jornada && !jornadas.some((j) => j.number === liga.jornada)) kinds.push(game.kind);
+  const toca = tocaTipo(kinds);
   const rows = finalStandings(game);
   const medal = ["🥇", "🥈", "🥉"];
   const minutos = game.endedAt ? Math.max(1, Math.round((Date.parse(game.endedAt) - Date.parse(game.startedAt)) / 60000)) : null;
@@ -223,6 +229,9 @@ function Summary({ game, liga, onRetry, onSalir, onOtra }: {
                   {r.lives < 0 ? "💀 BUST" : r.lives === 0 ? "vida cero" : `${r.lives} ${r.lives === 1 ? "vida" : "vidas"}`}
                   {(game.tiradas?.[r.id] ?? 0) > 0 && ` · 🏊 ${game.tiradas[r.id]} lanzada${game.tiradas[r.id] > 1 ? "s" : ""}`}
                   {(game.secadas?.[r.id] ?? 0) > 0 && ` · 💧 ${game.secadas[r.id]} recibida${game.secadas[r.id] > 1 ? "s" : ""}`}
+                  {(game.marcas?.[r.id]?.historia ?? 0) > 0 && ` · 📜 ${game.marcas[r.id].historia}`}
+                  {(game.marcas?.[r.id]?.escalera_tirada ?? 0) > 0 && ` · 🪜 ${game.marcas[r.id].escalera_tirada}`}
+                  {(game.marcas?.[r.id]?.escalera_remada ?? 0) > 0 && ` · 🚣 ${game.marcas[r.id].escalera_remada}`}
                 </span>
               </span>
               <span className="text-right [text-shadow:0_1px_4px_rgba(0,0,0,.4)]">
@@ -243,13 +252,19 @@ function Summary({ game, liga, onRetry, onSalir, onOtra }: {
         {eligiendo ? (
           <div className="space-y-2">
             <p className="text-center font-semibold">¿Qué jugamos ahora?</p>
+            <p className="text-center text-xs text-muted">Toca {toca.kind === "sobrante" ? "♻️ sobrantes" : "🎲 normal"}: {toca.motivo}</p>
             <div className="grid grid-cols-2 gap-2">
               {[
                 { k: "normal" as const, label: "Normal", v: NORMAL, pts: "5-3-2-1-0" },
                 { k: "sobrante" as const, label: "Sobrantes", v: SOBRANTES, pts: "9-6-4-2-0" },
               ].map((o) => (
-                <button key={o.k} onClick={() => onOtra(o.k)} className="rounded-2xl bg-gold py-3.5 font-bold text-felt">
+                <button
+                  key={o.k}
+                  onClick={() => onOtra(o.k)}
+                  className={`rounded-2xl py-3.5 font-bold ${o.k === toca.kind ? "bg-gold text-felt" : "border border-gold text-gold"}`}
+                >
                   {o.label}
+                  {o.k === toca.kind && <span className="ml-1.5 rounded-full bg-black/15 px-1.5 text-[10px] uppercase">toca</span>}
                   <span className="block text-xs font-medium opacity-80">{o.v} vidas · {o.pts}</span>
                 </button>
               ))}
@@ -268,9 +283,13 @@ function Summary({ game, liga, onRetry, onSalir, onOtra }: {
 }
 
 function Setup({ onStart }: { onStart: (g: Game) => void }) {
-  const { players, standings, loading, error } = useLeague();
-  const [start, setStart] = useState(NORMAL);
-  const [kind, setKind] = useState<JornadaKind>("normal");
+  const { players, standings, jornadas, loading, error } = useLeague();
+  // Lo normal: dos normales y una de sobrantes. Se sugiere sola según las últimas jornadas
+  const sugerida = tocaTipo(jornadas.toSorted((a, b) => a.number - b.number).map((j) => j.kind));
+  const [kindElegido, setKind] = useState<JornadaKind | null>(null);
+  const [startElegido, setStart] = useState<number | null>(null);
+  const kind = kindElegido ?? sugerida.kind;
+  const start = startElegido ?? (kind === "sobrante" ? SOBRANTES : NORMAL);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [colorOf, setColorOf] = useState<Record<string, string>>({}); // copia local
   const [picks, setPicks] = useState<Record<string, string>>({}); // cambiados ahora con 🎨
@@ -390,10 +409,14 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
               className={`rounded-xl py-3 font-semibold transition ${kind === o.k ? "bg-gold text-felt" : "border border-line text-muted"}`}
             >
               {o.label}
+              {o.k === sugerida.kind && <span className="ml-1.5 rounded-full bg-black/15 px-1.5 text-[10px] uppercase">toca</span>}
               <span className="block text-xs font-medium opacity-80">{o.v} vidas · {o.pts}</span>
             </button>
           ))}
         </div>
+        <p className="mt-2 text-center text-xs text-muted">
+          Toca {sugerida.kind === "sobrante" ? "♻️ sobrantes" : "🎲 normal"}: {sugerida.motivo}
+        </p>
 
         <div className="mt-5 text-center">
           <span className="tabular text-6xl font-bold text-gold">{start}</span>
@@ -569,6 +592,7 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [picker, setPicker] = useState<Seat | null>(null); // quién va a lanzar una piscina
   const [secado, setSecado] = useState<Secado | null>(null);
+  const [marcando, setMarcando] = useState<{ seat: Seat; tipo: "historia" | "escalera" } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [ordering, setOrdering] = useState(false); // recolocar cartas según cómo estamos sentados
@@ -606,6 +630,12 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
         return rest;
       });
     }, 1500);
+  }
+
+  function apuntar(seat: Seat, kind: Marca) {
+    setMarcando(null);
+    update((g) => (g?.id === game.id ? marcar(g, seat.id, kind) : g));
+    flash(kind === "historia" ? `📜 +1 de historia para ${seat.name}` : kind === "escalera_tirada" ? `🪜 Escalera de ${seat.name}` : `🚣 ${seat.name} rema la escalera`);
   }
 
   function piscina(thrower: Seat, victim: Seat) {
@@ -696,7 +726,14 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
                     )}
                   </div>
 
-                  <div className="pointer-events-auto flex gap-[3cqmin]">
+                  <div className="pointer-events-auto flex items-center gap-[3cqmin]">
+                    <button
+                      onClick={() => setMarcando({ seat: s, tipo: "historia" })}
+                      aria-label={`Punto de historia para ${s.name}`}
+                      className="flex h-[max(32px,10cqmin)] w-[max(32px,10cqmin)] items-center justify-center rounded-full bg-black/20 text-[max(15px,5cqmin)] active:scale-90"
+                    >
+                      📜
+                    </button>
                     {!bust && (
                       <button
                         onClick={() => setPicker(s)}
@@ -706,13 +743,27 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
                         🏊
                       </button>
                     )}
+                    {!bust && (
+                      <button
+                        onClick={() => setMarcando({ seat: s, tipo: "escalera" })}
+                        aria-label={`Escalera de ${s.name}`}
+                        className="flex h-[max(32px,10cqmin)] w-[max(32px,10cqmin)] items-center justify-center rounded-full bg-black/20 text-[max(15px,5cqmin)] active:scale-90"
+                      >
+                        🪜
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 {/* Piscinas que le han caído en esta partida */}
-                {(game.secadas[s.id] ?? 0) > 0 && (
-                  <span className="pointer-events-none absolute bottom-[4cqmin] right-[4cqmin] rounded-full bg-black/30 px-[2cqmin] text-[max(12px,5cqmin)] font-semibold leading-snug text-white">
-                    💧{game.secadas[s.id] > 1 && `×${game.secadas[s.id]}`}
+                {/* y lo apuntado: historia y escaleras */}
+                {((game.secadas[s.id] ?? 0) > 0 || Object.values(game.marcas?.[s.id] ?? {}).some(Boolean)) && (
+                  <span className="pointer-events-none absolute bottom-[4cqmin] right-[4cqmin] flex flex-col items-end gap-[1cqmin] text-[max(11px,4.5cqmin)] font-semibold leading-snug text-white">
+                    {(game.secadas[s.id] ?? 0) > 0 && <span className="rounded-full bg-black/30 px-[2cqmin]">💧{game.secadas[s.id] > 1 && `×${game.secadas[s.id]}`}</span>}
+                    {([["historia", "📜"], ["escalera_tirada", "🪜"], ["escalera_remada", "🚣"]] as const).map(([k, icono]) => {
+                      const n = game.marcas?.[s.id]?.[k] ?? 0;
+                      return n > 0 && <span key={k} className="rounded-full bg-black/30 px-[2cqmin]">{icono}{n > 1 && `×${n}`}</span>;
+                    })}
                   </span>
                 )}
 
@@ -782,6 +833,29 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
       )}
 
       {picker && <PiscinaPicker seat={picker} seats={game.seats} onPick={piscina} onClose={() => setPicker(null)} />}
+
+      {/* Historia y escaleras: siempre con confirmación para no equivocarse */}
+      {marcando && (
+        <div className="absolute inset-0 z-20 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center" onClick={() => setMarcando(null)}>
+          <div className="w-full max-w-sm space-y-3 rounded-3xl bg-felt p-4 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {marcando.tipo === "historia" ? (
+              <>
+                <p className="text-5xl">📜</p>
+                <p className="text-lg font-semibold text-ink">¿Punto de historia para <Starred name={marcando.seat.name} />?</p>
+                <button onClick={() => apuntar(marcando.seat, "historia")} className="w-full rounded-2xl bg-gold py-3.5 font-bold text-felt">Sí, +1 de historia</button>
+              </>
+            ) : (
+              <>
+                <p className="text-5xl">🪜</p>
+                <p className="text-lg font-semibold text-ink">Escalera de <Starred name={marcando.seat.name} /></p>
+                <button onClick={() => apuntar(marcando.seat, "escalera_tirada")} className="w-full rounded-2xl bg-gold py-3.5 font-bold text-felt">🪜 Ha tirado una escalera</button>
+                <button onClick={() => apuntar(marcando.seat, "escalera_remada")} className="w-full rounded-2xl border border-gold py-3.5 font-bold text-gold">🚣 Ha remado una escalera</button>
+              </>
+            )}
+            <button onClick={() => setMarcando(null)} className="w-full py-2 text-sm text-muted">Cancelar</button>
+          </div>
+        </div>
+      )}
 
       {secado && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm" onClick={() => setSecado(null)}>

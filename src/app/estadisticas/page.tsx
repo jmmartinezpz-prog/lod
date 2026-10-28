@@ -337,6 +337,8 @@ export default function Estadisticas() {
   <Bars title="🏊 Piscinas lanzadas" stats={stats} pick={(s) => s.thrown} />
   <Bars title="💧 Piscinas recibidas" stats={stats} pick={(s) => s.received} />
   <Bars title="🩸 Vidas perdidas (desde el 28/10)" stats={stats} pick={(s) => s.lost} />
+  <Bars title="🪜 Escaleras tiradas" stats={stats} pick={(s) => s.escalerasTiradas} />
+  <Bars title="🚣 Escaleras remadas" stats={stats} pick={(s) => s.escalerasRemadas} />
         </div>
         {/* Tablas completas */}
         <Card title="⚔️ Partidas">
@@ -354,6 +356,8 @@ export default function Estadisticas() {
               ["🏊 Lanzadas", (s) => s.thrown],
               ["💧 Recibidas", (s) => s.received],
               ["🤦 Autopiscinas", (s) => s.autopiscinas],
+              ["🪜 Escaleras", (s) => s.escalerasTiradas],
+              ["🚣 Remadas", (s) => s.escalerasRemadas],
               ["Con marcador*", (s) => s.partidasConVidas],
               ["🩸 Perdidas*", (s) => s.lost],
               ["🩸 Perdidas / partida*", (s) => fmt(s.vidasPorPartida)],
@@ -717,6 +721,8 @@ function Individual({ history, stats, standings, focus, onFocus, sanciones, fina
         ["Puntos", st?.juegoPts ?? 0],
         ["Primero en caer", st?.firstOut ?? 0],
         ["Con marcador (desde el 28/10)", st?.partidasConVidas ?? 0],
+        ["🪜 Escaleras tiradas", st?.escalerasTiradas ?? 0],
+        ["🚣 Escaleras remadas", st?.escalerasRemadas ?? 0],
         ["❤️ Vidas al ganar (media)", fmt(st?.vidasAlGanar ?? null)],
         ["💪 Victoria más holgada", st?.maxVidasGanando != null ? `${st.maxVidasGanando} vidas` : "–"],
         ["😅 Victorias por la mínima", st?.porLaMinima ?? 0],

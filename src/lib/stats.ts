@@ -32,6 +32,9 @@ export type SeatResumen = PartidaJugador & {
   thrown: number; // piscinas lanzadas (a otros)
   received: number; // piscinas recibidas (de otros)
   autos: number; // autopiscinas: se la tiró él mismo
+  historia: number; // puntos de historia en la partida
+  escTiradas: number; // escaleras tiradas
+  escRemadas: number; // escaleras remadas
   gained: number;
   outAt: number | null;
   place: number;
@@ -85,7 +88,9 @@ export function resumir(
       const endAt = partida.ended_at ? Math.max(Date.parse(partida.ended_at), last) : live ? now : last;
 
       const seats = seatsBy.get(partida.id)!.map((j) => {
-        const mine = moves.filter((m) => m.jugador_id === j.id);
+        const todos = moves.filter((m) => m.jugador_id === j.id);
+        // Las vidas solo con movimientos de vidas y piscinas (historia y escaleras no las tocan)
+        const mine = todos.filter((m) => m.kind === "vida" || m.kind === "piscina");
         const lives = mine.at(-1)?.lives_after ?? partida.start_lives;
         return {
           ...j,
@@ -98,6 +103,9 @@ export function resumir(
           thrown: moves.filter((m) => m.kind === "piscina" && m.from_jugador_id === j.id && m.jugador_id !== j.id).length,
           received: mine.filter((m) => m.kind === "piscina" && m.from_jugador_id !== j.id).length,
           autos: mine.filter((m) => m.kind === "piscina" && m.from_jugador_id === j.id).length,
+          historia: todos.filter((m) => m.kind === "historia").length,
+          escTiradas: todos.filter((m) => m.kind === "escalera_tirada").length,
+          escRemadas: todos.filter((m) => m.kind === "escalera_remada").length,
           place: 0,
           points: null as number | null,
           moves: mine,
@@ -151,6 +159,8 @@ export type PlayerStats = {
   thrown: number;
   received: number;
   partidasConVidas: number; // partidas con marcador (desde VIDAS_DESDE)
+  escalerasTiradas: number; // apuntadas en el modo juego
+  escalerasRemadas: number;
   porTipo: { [K in JornadaKind]: PorTipo }; // jornadas normales y de sobrantes, por separado
   zeroWins: number; // victorias desde la vida cero
   vidasAlGanar: number | null; // media de vidas con las que gana: alto = gana sobrado
@@ -259,6 +269,8 @@ export function playerStats(opts: {
       received: recibidas,
       juegoPts: res.reduce((t, r) => t + r.points, 0),
       partidasConVidas: seats.length,
+      escalerasTiradas: resumenes.flatMap((r) => r.seats.filter((s) => s.key === key)).reduce((t, s) => t + s.escTiradas, 0),
+      escalerasRemadas: resumenes.flatMap((r) => r.seats.filter((s) => s.key === key)).reduce((t, s) => t + s.escRemadas, 0),
       porTipo: { normal: delTipo("normal"), sobrante: delTipo("sobrante") },
       zeroWins: seats.filter((s) => s.place === 1 && s.minLives === 0).length,
       vidasAlGanar: avg(ganadas),
@@ -368,6 +380,8 @@ export function records(stats: PlayerStats[], resumenes: Resumen[]): Record[] {
   top((s) => s.zeroWins, "0️⃣", "Más victorias desde la vida cero (desde el 28/10)", (n) => `${n}`);
   top((s) => s.historia, "📜", "Más puntos de historia", (n) => `${n}`);
   top((s) => s.autopiscinas, "🤦", "Más autopiscinas", (n) => `${n}`);
+  top((s) => s.escalerasTiradas, "🪜", "Más escaleras tiradas", (n) => `${n}`);
+  top((s) => s.escalerasRemadas, "🚣", "Más escaleras remadas", (n) => `${n}`);
   top((s) => s.porLaMinima, "😅", "Más victorias por la mínima (desde el 28/10)", (n) => `${n} con 1 vida o en vida cero`);
 
   const won = resumenes.filter((r) => r.winner);

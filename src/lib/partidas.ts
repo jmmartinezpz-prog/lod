@@ -71,9 +71,12 @@ export type Movimiento = {
   delta: number;
   lives_after: number; // -1 = BUST
   created_at: string;
-  kind: "vida" | "piscina";
+  kind: "vida" | "piscina" | Marca;
   from_jugador_id: string | null; // quién lanzó la piscina
 };
+
+// Lo que se apunta sin tocar las vidas: puntos de historia y escaleras (21_historia_y_escaleras.sql)
+export type Marca = "historia" | "escalera_tirada" | "escalera_remada";
 
 // Partida en curso tal como la guarda el móvil. lives: 0 = vida cero, -1 = BUST.
 export type Seat = { id: string; playerId: string | null; name: string; color: string; lives: number };
@@ -90,6 +93,7 @@ export type Game = {
   bustOrder: string[]; // ids en el orden en que han reventado
   secadas: Record<string, number>; // piscinas recibidas en esta partida, por asiento
   tiradas: Record<string, number>; // piscinas lanzadas en esta partida, por asiento
+  marcas: Record<string, Partial<Record<Marca, number>>>; // historia y escaleras, por asiento
 };
 
 // crypto.randomUUID solo existe en https; en la red local (http) hace falta el plan B.
@@ -116,6 +120,7 @@ export function newGame(start: number, kind: JornadaKind, seats: Omit<Seat, "id"
     bustOrder: [],
     secadas: {},
     tiradas: {},
+    marcas: {},
   };
 }
 
@@ -145,6 +150,30 @@ export function hit(g: Game, id: string, kind: Movimiento["kind"] = "vida", from
   if (lives === 0 && zeroGoneBy) lives = -1;
   if (lives === -1 && !zeroGoneBy && !g.seats.some((s) => s.id !== id && s.lives === 0)) zeroGoneBy = id;
   return move(g, seat, lives, zeroGoneBy, kind, from);
+}
+
+// Punto de historia o escalera: queda apuntado sin cambiar las vidas
+export function marcar(g: Game, id: string, kind: Marca): Game {
+  const seat = g.seats.find((s) => s.id === id);
+  if (!seat) return g;
+  const mias = g.marcas[id] ?? {};
+  return {
+    ...g,
+    marcas: { ...g.marcas, [id]: { ...mias, [kind]: (mias[kind] ?? 0) + 1 } },
+    pending: [
+      ...g.pending,
+      { id: uuid(), partida_id: g.id, jugador_id: id, delta: 0, lives_after: seat.lives, created_at: new Date().toISOString(), kind, from_jugador_id: null },
+    ],
+  };
+}
+
+// Lo de siempre son dos normales y una de sobrantes: lo que toca según las últimas jornadas
+export function tocaTipo(kinds: JornadaKind[]): { kind: JornadaKind; motivo: string } {
+  if (kinds.at(-1) === "sobrante") return { kind: "normal", motivo: "la última fue de sobrantes" };
+  const normales = kinds.length - 1 - kinds.findLastIndex((k) => k === "sobrante");
+  return normales >= 2
+    ? { kind: "sobrante", motivo: `van ${normales} normales seguidas` }
+    : { kind: "normal", motivo: normales === 1 ? "solo va 1 normal desde la última de sobrantes" : "toca empezar con normal" };
 }
 
 // Sumar una vida (también sirve para deshacer un BUST por error)
