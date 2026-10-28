@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Status } from "@/components/Status";
 import { useLeague } from "@/lib/useLeague";
+import { newGame, PALETTE as COLORS, syncGame, uuid, type Game } from "@/lib/partidas";
 
-const COLORS = ["#e0645a", "#4f8fe0", "#e2b84b", "#5cbf7a", "#a46be0", "#e08a3c", "#3cc4c4", "#e06bb0"];
 const PRESETS = [10, 20, 30, 40];
 const STORAGE_KEY = "lod-juego";
 
-type Seat = { id: string; name: string; color: string; lives: number };
-type Game = { start: number; seats: Seat[] };
+type Update = (fn: (g: Game | null) => Game | null) => void;
 
 const tileBg = (color: string) =>
   `radial-gradient(circle at 30% 20%, color-mix(in srgb, ${color} 85%, white), ${color} 45%, color-mix(in srgb, ${color} 60%, black))`;
@@ -19,21 +18,25 @@ export default function Juego() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+      // Las partidas de versiones anteriores (sin id) no se pueden guardar en las estadísticas
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (saved) setGame(JSON.parse(saved));
+      if (saved?.id && saved.pending) setGame(saved);
     } catch {}
   }, []);
 
-  function save(next: Game | null) {
-    setGame(next);
-    try {
-      if (next) localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      else localStorage.removeItem(STORAGE_KEY);
-    } catch {}
-  }
+  const update = useCallback<Update>((fn) => {
+    setGame((cur) => {
+      const next = fn(cur);
+      try {
+        if (next) localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        else localStorage.removeItem(STORAGE_KEY);
+      } catch {}
+      return next;
+    });
+  }, []);
 
-  return game ? <Board game={game} onChange={save} /> : <Setup onStart={save} />;
+  return game ? <Board game={game} update={update} /> : <Setup onStart={(g) => update(() => g)} />;
 }
 
 function Setup({ onStart }: { onStart: (g: Game) => void }) {
@@ -75,7 +78,12 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   }
 
   function begin() {
-    onStart({ start, seats: seated.map((c) => ({ id: c.id, name: c.name, color: color(c.id), lives: start })) });
+    onStart(
+      newGame(
+        start,
+        seated.map((c) => ({ playerId: c.id.startsWith("wc-") ? null : c.id, name: c.name, color: color(c.id) })),
+      ),
+    );
   }
 
   return (
@@ -174,17 +182,28 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   );
 }
 
-function Board({ game, onChange }: { game: Game; onChange: (g: Game | null) => void }) {
+function Board({ game, update }: { game: Game; update: Update }) {
   const rows = useRows(game.seats.length);
   const [deltas, setDeltas] = useState<Record<string, number>>({});
+  const [dismissed, setDismissed] = useState<string | null>(null);
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const sync = useSync(game, update);
   useWakeLock();
 
   function add(id: string, delta: number) {
     const seat = game.seats.find((s) => s.id === id)!;
     const lives = Math.max(0, seat.lives + delta);
     if (lives === seat.lives) return;
-    onChange({ ...game, seats: game.seats.map((s) => (s.id === id ? { ...s, lives } : s)) });
+    update((g) =>
+      g && {
+        ...g,
+        seats: g.seats.map((s) => (s.id === id ? { ...s, lives } : s)),
+        pending: [
+          ...g.pending,
+          { id: uuid(), partida_id: g.id, jugador_id: id, delta: lives - seat.lives, lives_after: lives, created_at: new Date().toISOString() },
+        ],
+      },
+    );
     setDeltas((cur) => ({ ...cur, [id]: (cur[id] ?? 0) + lives - seat.lives }));
     clearTimeout(timers.current[id]);
     timers.current[id] = setTimeout(() => {
@@ -196,15 +215,26 @@ function Board({ game, onChange }: { game: Game; onChange: (g: Game | null) => v
     }, 1500);
   }
 
-  function reset() {
-    if (!confirm("¿Reiniciar las vidas de todos?")) return;
-    onChange({ ...game, seats: game.seats.map((s) => ({ ...s, lives: game.start })) });
+  // Cierra la partida en Supabase; si no se puede, deja elegir entre salir igual o seguir.
+  async function finish(next: () => Game | null) {
+    const ended = { ...game, endedAt: new Date().toISOString(), synced: false };
+    const res = await syncGame(ended);
+    if (res.error && !confirm(`No se ha podido guardar la partida (${res.error}).\n\n¿Salir igual? Se perderá de las estadísticas.`)) return;
+    update(next);
+  }
+
+  function rematch() {
+    if (!confirm("¿Guardar esta partida y empezar otra con los mismos jugadores?")) return;
+    finish(() => newGame(game.start, game.seats));
   }
 
   function exit() {
-    if (!confirm("¿Terminar la partida?")) return;
-    onChange(null);
+    if (!confirm("¿Terminar y guardar la partida?")) return;
+    finish(() => null);
   }
+
+  const alive = game.seats.filter((s) => s.lives > 0);
+  const winner = game.seats.length > 1 && alive.length === 1 ? alive[0] : null;
 
   const grid = rows.map((size, r) => {
     const from = rows.slice(0, r).reduce((a, b) => a + b, 0);
@@ -247,13 +277,74 @@ function Board({ game, onChange }: { game: Game; onChange: (g: Game | null) => v
         </div>
       ))}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center pt-2">
-        <div className="pointer-events-auto flex gap-1 rounded-full bg-black/50 p-1 backdrop-blur">
-          <button onClick={reset} aria-label="Reiniciar" className="h-9 w-9 rounded-full text-lg text-white">↺</button>
+        <div className="pointer-events-auto flex items-center gap-1 rounded-full bg-black/50 p-1 backdrop-blur">
+          <span
+            title={sync.error ?? undefined}
+            className="px-2 text-xs text-white/70"
+            onClick={() => sync.error && alert(`Sin guardar: ${sync.error}`)}
+          >
+            {sync.pending ? `⏳ ${sync.pending}` : "☁️ ✓"}
+          </span>
+          <button onClick={rematch} aria-label="Nueva partida" className="h-9 w-9 rounded-full text-lg text-white">↺</button>
           <button onClick={exit} aria-label="Terminar" className="h-9 w-9 rounded-full text-lg text-white">✕</button>
         </div>
       </div>
+
+      {winner && dismissed !== winner.id && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm space-y-4 rounded-3xl p-6 text-center text-white shadow-2xl" style={{ background: tileBg(winner.color) }}>
+            <p className="text-6xl">🏆</p>
+            <p className="text-3xl font-black uppercase [text-shadow:0_2px_10px_rgba(0,0,0,.45)]">{winner.name}</p>
+            <p className="font-semibold">gana con {winner.lives} {winner.lives === 1 ? "vida" : "vidas"}</p>
+            <div className="grid gap-2 pt-2">
+              <button onClick={rematch} className="rounded-xl bg-white py-3 font-black text-black">↺ Otra partida</button>
+              <button onClick={exit} className="rounded-xl bg-black/30 py-3 font-bold">Terminar</button>
+              <button onClick={() => setDismissed(winner.id)} className="py-1 text-sm text-white/80">Seguir jugando</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+// Va subiendo la partida a Supabase en segundo plano; lo pendiente se guarda en el móvil y se reintenta.
+function useSync(game: Game, update: Update) {
+  const [error, setError] = useState<string | null>(null);
+  const busy = useRef(false);
+  const latest = useRef(game);
+  useEffect(() => {
+    latest.current = game;
+  });
+
+  const flush = useCallback(async () => {
+    const snap = latest.current;
+    if (busy.current || (snap.synced && !snap.pending.length)) return;
+    busy.current = true;
+    const res = await syncGame(snap);
+    busy.current = false;
+    setError(res.error);
+    update((g) =>
+      g?.id === snap.id
+        ? {
+            ...g,
+            synced: g.synced || (res.header && g.endedAt === snap.endedAt),
+            pending: g.pending.filter((m) => !res.sent.includes(m.id)),
+          }
+        : g,
+    );
+  }, [update]);
+
+  useEffect(() => {
+    flush();
+  }, [game.synced, game.pending.length, flush]);
+
+  useEffect(() => {
+    const id = setInterval(flush, 10_000);
+    return () => clearInterval(id);
+  }, [flush]);
+
+  return { pending: game.pending.length + (game.synced ? 0 : 1), error };
 }
 
 // Cuántas cartas va en cada fila; cada fila se estira a todo el ancho, así nunca queda hueco.

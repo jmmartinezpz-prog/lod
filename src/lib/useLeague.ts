@@ -55,10 +55,12 @@ export function useLeague() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     if (!supabaseConfigured) return;
-    const channel = supabase
-      .channel("lod-live")
-      .on("postgres_changes", { event: "*", schema: "public" }, () => load())
-      .subscribe();
+    // Solo las tablas de la liga: los movimientos del modo juego no deben recargarla
+    let channel = supabase.channel("lod-live");
+    for (const table of ["players", "jornadas", "results", "adjustments", "events", "league"]) {
+      channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () => load());
+    }
+    channel.subscribe();
     return () => {
       supabase.removeChannel(channel);
     };

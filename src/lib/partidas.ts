@@ -1,0 +1,145 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { supabase, supabaseConfigured } from "./supabase";
+
+// Colores de jugador: validados para daltonismo sobre el fondo de la app.
+// Los 5 primeros van a los fijos por orden de mesa; el resto, a wildcards.
+export const PALETTE = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
+
+export type Partida = { id: string; started_at: string; ended_at: string | null; start_lives: number };
+
+export type PartidaJugador = {
+  id: string;
+  partida_id: string;
+  player_id: string | null;
+  name: string;
+  color: string;
+  seat: number;
+};
+
+export type Movimiento = {
+  id: string;
+  partida_id: string;
+  jugador_id: string;
+  delta: number;
+  lives_after: number;
+  created_at: string;
+};
+
+// Partida en curso tal como la guarda el móvil
+export type Seat = { id: string; playerId: string | null; name: string; color: string; lives: number };
+export type Game = {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  start: number;
+  seats: Seat[];
+  synced: boolean; // partida y jugadores ya están en Supabase
+  pending: Movimiento[]; // movimientos aún sin subir
+};
+
+// crypto.randomUUID solo existe en https; en la red local (http) hace falta el plan B.
+export function uuid() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+export function newGame(start: number, seats: Omit<Seat, "id" | "lives">[]): Game {
+  return {
+    id: uuid(),
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+    start,
+    seats: seats.map((s) => ({ ...s, id: uuid(), lives: start })),
+    synced: false,
+    pending: [],
+  };
+}
+
+// Sube lo que falte. Todo son upserts con ids del móvil, así que repetir es inocuo.
+export async function syncGame(g: Game): Promise<{ header: boolean; sent: string[]; error: string | null }> {
+  if (!supabaseConfigured) return { header: false, sent: [], error: "Supabase no configurado" };
+  if (!g.synced) {
+    const p = await supabase
+      .from("partidas")
+      .upsert({ id: g.id, started_at: g.startedAt, ended_at: g.endedAt, start_lives: g.start });
+    if (p.error) return { header: false, sent: [], error: p.error.message };
+    const j = await supabase.from("partida_jugadores").upsert(
+      g.seats.map((s, i) => ({ id: s.id, partida_id: g.id, player_id: s.playerId, name: s.name, color: s.color, seat: i })),
+    );
+    if (j.error) return { header: false, sent: [], error: j.error.message };
+  }
+  if (g.pending.length) {
+    const m = await supabase.from("partida_movimientos").upsert(g.pending);
+    if (m.error) return { header: true, sent: [], error: m.error.message };
+  }
+  return { header: true, sent: g.pending.map((m) => m.id), error: null };
+}
+
+// Supabase devuelve como mucho 1000 filas por consulta
+async function fetchAll<T>(table: string, order: string) {
+  const rows: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase.from(table).select("*").order(order).range(from, from + 999);
+    if (error) throw error;
+    rows.push(...(data as T[]));
+    if (!data || data.length < 1000) return rows;
+  }
+}
+
+export function usePartidas() {
+  const [partidas, setPartidas] = useState<Partida[]>([]);
+  const [jugadores, setJugadores] = useState<PartidaJugador[]>([]);
+  const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const load = useCallback(async () => {
+    if (!supabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const [p, j, m] = await Promise.all([
+        fetchAll<Partida>("partidas", "started_at"),
+        fetchAll<PartidaJugador>("partida_jugadores", "seat"),
+        fetchAll<Movimiento>("partida_movimientos", "created_at"),
+      ]);
+      setPartidas(p);
+      setJugadores(j);
+      setMovimientos(m);
+      setError(null);
+    } catch (e) {
+      setError((e as { message?: string }).message ?? "Error cargando partidas");
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load();
+    if (!supabaseConfigured) return;
+    // Durante una partida llegan muchos cambios seguidos: se agrupan en una recarga.
+    const schedule = () => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(load, 400);
+    };
+    let channel = supabase.channel("lod-juego");
+    for (const table of ["partidas", "partida_jugadores", "partida_movimientos"]) {
+      channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, schedule);
+    }
+    channel.subscribe();
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      supabase.removeChannel(channel);
+    };
+  }, [load]);
+
+  return { partidas, jugadores, movimientos, loading, error };
+}

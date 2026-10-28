@@ -9,6 +9,7 @@ const links = [
   { href: "/", label: "Clasificación" },
   { href: "/jornadas", label: "Jornadas" },
   { href: "/juego", label: "Juego" },
+  { href: "/estadisticas", label: "Stats" },
 ];
 const adminLinks = [
   { href: "/registrar", label: "+ Jornada" },
