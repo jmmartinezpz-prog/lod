@@ -5,7 +5,7 @@ import { Status } from "@/components/Status";
 import { LivesChart } from "@/components/LivesChart";
 import { useLeague } from "@/lib/useLeague";
 import { usePartidas } from "@/lib/partidas";
-import { dayOf, inRange, playerStats, records, resumir, type PlayerStats, type Range, type Resumen } from "@/lib/stats";
+import { dayOf, inRange, playerStats, records, resumir, splashes, type PlayerStats, type Range, type Resumen } from "@/lib/stats";
 
 type Preset = "todo" | "hoy" | "7" | "30" | "mes" | "fechas";
 const PRESETS: { id: Preset; label: string }[] = [
@@ -71,6 +71,7 @@ export default function Estadisticas() {
     range,
   });
   const recs = records(stats, terminadas);
+  const pairs = splashes(enRango);
   const jornadasEnRango = league.jornadas.filter((j) => inRange(j.played_on, range)).length;
   const sum = (pick: (s: PlayerStats) => number) => stats.reduce((t, s) => t + pick(s), 0);
 
@@ -81,7 +82,7 @@ export default function Estadisticas() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-black">📊 Estadísticas</h1>
+        <h1 className="text-3xl font-bold">📊 Estadísticas</h1>
         <p className="text-sm text-muted">Se actualizan solas en tiempo real</p>
       </div>
 
@@ -131,15 +132,22 @@ export default function Estadisticas() {
       {/* En directo */}
       {live && (
         <section className="space-y-3 rounded-2xl border border-red/50 bg-card p-4">
-          <h2 className="flex items-center gap-2 font-black">
+          <h2 className="flex items-center gap-2 font-bold">
             <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red" /> En directo
             <span className="text-xs font-normal text-muted">desde las {hora(live.startAt)}</span>
           </h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {live.seats.map((s) => (
-              <div key={s.id} className={`rounded-xl p-3 text-white ${s.lives === 0 ? "opacity-40 grayscale" : ""}`} style={{ background: s.color }}>
-                <p className="truncate text-xs font-bold uppercase [text-shadow:0_1px_3px_rgba(0,0,0,.4)]">{s.name}</p>
-                <p className="tabular text-3xl font-black [text-shadow:0_1px_3px_rgba(0,0,0,.4)]">{s.lives === 0 ? "💀" : s.lives}</p>
+              <div key={s.id} className="rounded-xl p-3 text-white [text-shadow:0_1px_3px_rgba(0,0,0,.4)]" style={{ background: s.lives < 0 ? "#1b1b1b" : s.color }}>
+                <p className="text-sm font-semibold leading-tight">{s.name}</p>
+                {s.lives < 0 ? (
+                  <p className="text-2xl font-extrabold text-[#ff4040]">💀 BUST!</p>
+                ) : (
+                  <p className="tabular text-3xl font-bold">
+                    {s.lives}
+                    {s.lives === 0 && <span className="ml-2 align-middle text-xs font-semibold">VIDA CERO</span>}
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -189,7 +197,7 @@ export default function Estadisticas() {
                     </span>
                   ))}
                 </div>
-                <span className="tabular w-10 text-right text-sm font-black">{s.streak > 0 ? `🔥${s.streak}` : ""}</span>
+                <span className="tabular w-10 text-right text-sm font-bold">{s.streak > 0 ? `🔥${s.streak}` : ""}</span>
               </li>
             ))}
           </ul>
@@ -205,7 +213,26 @@ export default function Estadisticas() {
         <Bars title="📜 Puntos de historia" stats={stats} pick={(s) => s.historia} />
         <Bars title="🤦 Autopiscinas" stats={stats} pick={(s) => s.autopiscinas} />
         <Bars title="🩸 Vidas perdidas" stats={stats} pick={(s) => s.lost} />
+        <Bars title="🏊 Piscinas lanzadas (partidas)" stats={stats} pick={(s) => s.thrown} />
+        <Bars title="💧 Piscinas recibidas (partidas)" stats={stats} pick={(s) => s.received} />
       </div>
+
+      {pairs.length > 0 && (
+        <Card title="🏊 Quién le lanza piscinas a quién">
+          <ul className="space-y-1.5">
+            {pairs.slice(0, 12).map((p) => (
+              <li key={`${p.from.key}>${p.to.key}`} className="flex items-center gap-2 rounded-lg bg-felt px-3 py-2 text-sm">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.from.color }} />
+                <span className="flex-1 leading-tight">{p.from.name}</span>
+                <span className="text-muted">→</span>
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.to.color }} />
+                <span className="flex-1 leading-tight">{p.to.name}</span>
+                <span className="tabular w-8 text-right font-bold">{p.n}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {/* Récords */}
       {recs.length > 0 && (
@@ -216,7 +243,7 @@ export default function Estadisticas() {
                 <span className="text-2xl">{r.icon}</span>
                 <div className="min-w-0">
                   <p className="text-xs text-muted">{r.title}</p>
-                  <p className="truncate font-bold">{r.who}</p>
+                  <p className="font-bold leading-tight">{r.who}</p>
                   <p className="text-xs text-muted">{r.value}</p>
                 </div>
               </li>
@@ -238,6 +265,9 @@ export default function Estadisticas() {
             ["🔥 Racha", (s) => s.streak],
             ["Mejor racha", (s) => s.bestStreak],
             ["🩸 Perdidas", (s) => s.lost],
+            ["🏊 Lanzadas", (s) => s.thrown],
+            ["💧 Recibidas", (s) => s.received],
+            ["0️⃣ Victorias en vida cero", (s) => s.zeroWins],
             ["💚 Recuperadas", (s) => s.gained],
           ]}
         />
@@ -276,7 +306,7 @@ function Tile({ icon, label, value }: { icon: string; label: string; value: numb
   return (
     <div className="rounded-2xl border border-line bg-card p-3">
       <p className="text-xs text-muted">{icon} {label}</p>
-      <p className="tabular text-3xl font-black">{value}</p>
+      <p className="tabular text-3xl font-bold">{value}</p>
     </div>
   );
 }
@@ -284,7 +314,7 @@ function Tile({ icon, label, value }: { icon: string; label: string; value: numb
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-2xl border border-line bg-card p-4">
-      <h2 className="mb-3 font-black">{title}</h2>
+      <h2 className="mb-3 font-bold">{title}</h2>
       {children}
     </section>
   );
@@ -298,7 +328,7 @@ function Name({ s, className = "" }: { s: PlayerStats; className?: string }) {
   return (
     <span className={`flex min-w-0 items-center gap-1.5 text-sm ${className}`}>
       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
-      <span className="truncate">{s.name}</span>
+      <span className="leading-tight [overflow-wrap:anywhere]">{s.name}</span>
     </span>
   );
 }
@@ -309,13 +339,14 @@ function Eliminaciones({ r }: { r: Resumen }) {
     <ol className="space-y-1 text-sm">
       {r.seats.map((s) => (
         <li key={s.id} className="flex items-center gap-2 rounded-lg bg-felt px-3 py-1.5">
-          <span className="tabular w-6 font-black text-muted">{s.place}º</span>
+          <span className="tabular w-6 font-bold text-muted">{s.place}º</span>
           <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
-          <span className="flex-1 truncate">{s.name}</span>
-          <span className="tabular text-xs text-muted">
+          <span className="flex-1 leading-tight">{s.name}</span>
+          <span className="tabular shrink-0 text-right text-xs text-muted">
             {s.outAt
-              ? `💀 min ${Math.floor((s.outAt - r.startAt) / 60_000)}${s.place === n ? " · primero en caer" : ""}`
-              : `${s.lives} ❤️${r.winner?.id === s.id ? " · 🏆" : ""}`}
+              ? `💀 BUST min ${Math.floor((s.outAt - r.startAt) / 60_000)}${s.place === n ? " · 1º en caer" : ""}`
+              : `${s.lives === 0 ? "vida cero" : `${s.lives} ❤️`}${r.winner?.id === s.id ? " · 🏆" : ""}`}
+            {s.thrown + s.received > 0 && <span className="block">🏊 {s.thrown} · 💧 {s.received}</span>}
           </span>
         </li>
       ))}
@@ -333,7 +364,7 @@ function Bars({ title, stats, pick }: { title: string; stats: PlayerStats[]; pic
       ) : (
         <ul className="space-y-2">
           {rows.map((s) => (
-            <li key={s.key} title={`${s.name}: ${pick(s)}`} className="grid grid-cols-[7.5rem_1fr_2rem] items-center gap-2">
+            <li key={s.key} title={`${s.name}: ${pick(s)}`} className="grid grid-cols-[8.5rem_1fr_2rem] items-center gap-2">
               <Name s={s} />
               <div className="h-3">
                 <div className="h-full rounded-r" style={{ width: `${(pick(s) / max) * 100}%`, background: s.color }} />
@@ -363,7 +394,7 @@ function Table({ stats, cols }: { stats: PlayerStats[]; cols: [string, (s: Playe
         <tbody>
           {stats.map((s) => (
             <tr key={s.key} className="border-t border-line">
-              <td className="sticky left-0 bg-card py-2 pr-3"><Name s={s} className="max-w-36" /></td>
+              <td className="sticky left-0 min-w-32 bg-card py-2 pr-3"><Name s={s} /></td>
               {cols.map(([h, f]) => (
                 <td key={h} className="tabular px-2 py-2 text-right font-semibold">{f(s)}</td>
               ))}

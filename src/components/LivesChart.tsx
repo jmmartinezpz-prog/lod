@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { livesAt, type Resumen } from "@/lib/stats";
 
 const H = 260;
-const M = { t: 14, r: 92, b: 26, l: 30 };
+const M = { t: 14, r: 100, b: 26, l: 30 };
 const STEPS = [1, 2, 5, 10, 15, 30, 60, 120];
 
 function useWidth() {
@@ -19,7 +19,15 @@ function useWidth() {
   return [ref, width] as const;
 }
 
-const short = (name: string) => (name.length > 11 ? `${name.slice(0, 10)}…` : name);
+// Etiqueta corta sin puntos suspensivos: palabras enteras mientras quepan
+function short(name: string) {
+  let out = "";
+  for (const w of name.split(" ")) {
+    if (out && [...`${out} ${w}`].length > 13) break;
+    out = out ? `${out} ${w}` : w;
+  }
+  return out;
+}
 
 // Vidas de cada jugador a lo largo de la partida (escalones), con el momento en que cae cada uno.
 export function LivesChart({ r }: { r: Resumen }) {
@@ -31,7 +39,7 @@ export function LivesChart({ r }: { r: Resumen }) {
   const yMax = Math.max(start, ...r.moves.map((m) => m.lives_after));
   const plotW = Math.max(10, width - M.l - M.r);
   const x = (t: number) => M.l + ((t - t0) / (t1 - t0)) * plotW;
-  const y = (v: number) => M.t + (1 - v / yMax) * (H - M.t - M.b);
+  const y = (v: number) => M.t + (1 - Math.max(0, v) / yMax) * (H - M.t - M.b); // BUST (-1) se pinta en 0
 
   const totalMin = (t1 - t0) / 60_000;
   const step = STEPS.find((s) => totalMin / s <= 5) ?? 240;
@@ -61,7 +69,7 @@ export function LivesChart({ r }: { r: Resumen }) {
     hover === null
       ? null
       : r.seats
-          .map((s) => ({ s, v: s.outAt && s.outAt <= hover ? 0 : livesAt(s, start, hover) }))
+          .map((s) => ({ s, v: livesAt(s, start, hover) }))
           .sort((a, b) => b.v - a.v);
 
   return (
@@ -136,8 +144,8 @@ export function LivesChart({ r }: { r: Resumen }) {
             {tip.map(({ s, v }) => (
               <p key={s.id} className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full" style={{ background: s.color }} />
-                <span className="flex-1 truncate">{s.name}</span>
-                <span className="tabular font-bold">{v === 0 ? "💀" : v}</span>
+                <span className="flex-1 leading-tight">{s.name}</span>
+                <span className="tabular font-bold">{v < 0 ? "💀" : v}</span>
               </p>
             ))}
           </div>

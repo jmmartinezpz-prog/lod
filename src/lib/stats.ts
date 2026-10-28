@@ -13,8 +13,10 @@ export const inRange = (day: string, r: Range) => (!r.from || day >= r.from) && 
 export type SeatResumen = PartidaJugador & {
   key: string;
   lives: number;
-  minLives: number;
+  minLives: number; // 0 = llegó a vida cero
   lost: number;
+  thrown: number; // piscinas lanzadas
+  received: number; // piscinas recibidas
   gained: number;
   outAt: number | null;
   place: number;
@@ -68,10 +70,12 @@ export function resumir(
           ...j,
           key: keyOf(j),
           lives,
-          minLives: Math.min(partida.start_lives, ...mine.map((m) => m.lives_after)),
+          minLives: Math.min(partida.start_lives, ...mine.map((m) => Math.max(0, m.lives_after))),
           lost: mine.reduce((s, m) => s + Math.max(0, -m.delta), 0),
           gained: mine.reduce((s, m) => s + Math.max(0, m.delta), 0),
-          outAt: lives === 0 ? Date.parse(mine.at(-1)!.created_at) : null,
+          outAt: lives < 0 ? Date.parse(mine.at(-1)!.created_at) : null,
+          thrown: moves.filter((m) => m.kind === "piscina" && m.from_jugador_id === j.id).length,
+          received: mine.filter((m) => m.kind === "piscina").length,
           place: 0,
           moves: mine,
         };
@@ -118,6 +122,9 @@ export type PlayerStats = {
   streak: number;
   bestStreak: number;
   form: FormItem[]; // de más antigua a más reciente
+  thrown: number;
+  received: number;
+  zeroWins: number; // victorias desde la vida cero
   // liga
   jornadas: number;
   jornadaWins: number;
@@ -187,6 +194,9 @@ export function playerStats(opts: {
       streak: juego.current,
       bestStreak: juego.best,
       form: seats.slice(-10).map(({ s, n, id }) => ({ place: s.place, of: n, partidaId: id })),
+      thrown: seats.reduce((t, { s }) => t + s.thrown, 0),
+      received: seats.reduce((t, { s }) => t + s.received, 0),
+      zeroWins: seats.filter(({ s }) => s.place === 1 && s.minLives === 0).length,
       jornadas: res.length,
       jornadaWins: res.filter((r) => r.position === 1).length,
       podios: res.filter((r) => r.position <= 3).length,
@@ -218,6 +228,9 @@ export function records(stats: PlayerStats[], resumenes: Resumen[]): Record[] {
   top((s) => s.firstOut, "🪦", "Más veces primero en caer", (n) => `${n}`);
   top((s) => s.lost, "🩸", "Más vidas perdidas", (n) => `${n}`);
   top((s) => s.piscinas, "🏊", "Más piscinas", (n) => `${n}`);
+  top((s) => s.thrown, "🏊", "Más piscinas lanzadas en partidas", (n) => `${n}`);
+  top((s) => s.received, "💧", "Más piscinas recibidas en partidas", (n) => `${n}`);
+  top((s) => s.zeroWins, "0️⃣", "Más victorias desde la vida cero", (n) => `${n}`);
   top((s) => s.historia, "📜", "Más puntos de historia", (n) => `${n}`);
 
   const won = resumenes.filter((r) => r.winner);
@@ -235,4 +248,23 @@ export function records(stats: PlayerStats[], resumenes: Resumen[]): Record[] {
   const short = done.toSorted((a, b) => a.endAt - a.startAt - (b.endAt - b.startAt))[0];
   if (short && short !== long) out.push({ icon: "⚡", title: "Partida más rápida", who: dayOf(short.partida.started_at), value: fmtMin(short.endAt - short.startAt) });
   return out;
+}
+
+export type Splash = { from: SeatResumen; to: SeatResumen; n: number };
+
+// Piscinas del modo juego agrupadas por quién a quién (por jugador, no por partida)
+export function splashes(resumenes: Resumen[]): Splash[] {
+  const out = new Map<string, Splash>();
+  for (const r of resumenes) {
+    const byId = new Map(r.seats.map((s) => [s.id, s]));
+    for (const m of r.moves) {
+      if (m.kind !== "piscina" || !m.from_jugador_id) continue;
+      const from = byId.get(m.from_jugador_id);
+      const to = byId.get(m.jugador_id);
+      if (!from || !to) continue;
+      const k = `${from.key}>${to.key}`;
+      out.set(k, { from, to, n: (out.get(k)?.n ?? 0) + 1 });
+    }
+  }
+  return [...out.values()].sort((a, b) => b.n - a.n);
 }

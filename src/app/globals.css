@@ -20,7 +20,7 @@
   --color-muted: var(--muted);
   --color-gold: var(--gold);
   --color-red: var(--red);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --animate-pop: pop 180ms ease-out;
 
   @keyframes pop {

@@ -23,11 +23,13 @@ export type Movimiento = {
   partida_id: string;
   jugador_id: string;
   delta: number;
-  lives_after: number;
+  lives_after: number; // -1 = BUST
   created_at: string;
+  kind: "vida" | "piscina";
+  from_jugador_id: string | null; // quién lanzó la piscina
 };
 
-// Partida en curso tal como la guarda el móvil
+// Partida en curso tal como la guarda el móvil. lives: 0 = vida cero, -1 = BUST.
 export type Seat = { id: string; playerId: string | null; name: string; color: string; lives: number };
 export type Game = {
   id: string;
@@ -37,6 +39,7 @@ export type Game = {
   seats: Seat[];
   synced: boolean; // partida y jugadores ya están en Supabase
   pending: Movimiento[]; // movimientos aún sin subir
+  zeroGoneBy: string | null; // quién hizo BUST siendo el único en vida cero (desde entonces no hay vida cero)
 };
 
 // crypto.randomUUID solo existe en https; en la red local (http) hace falta el plan B.
@@ -58,7 +61,44 @@ export function newGame(start: number, seats: Omit<Seat, "id" | "lives">[]): Gam
     seats: seats.map((s) => ({ ...s, id: uuid(), lives: start })),
     synced: false,
     pending: [],
+    zeroGoneBy: null,
   };
+}
+
+function move(g: Game, seat: Seat, lives: number, zeroGoneBy: string | null, kind: Movimiento["kind"], from: string | null): Game {
+  return {
+    ...g,
+    zeroGoneBy,
+    seats: g.seats.map((s) => (s.id === seat.id ? { ...s, lives } : s)),
+    pending: [
+      ...g.pending,
+      {
+        id: uuid(), partida_id: g.id, jugador_id: seat.id, delta: lives - seat.lives, lives_after: lives,
+        created_at: new Date().toISOString(), kind, from_jugador_id: from,
+      },
+    ],
+  };
+}
+
+// Quitar una vida. Todos tienen vida cero hasta que el único que estaba en 0 hace BUST;
+// a partir de ahí quien pierde su última vida revienta directamente.
+export function hit(g: Game, id: string, kind: Movimiento["kind"] = "vida", from: string | null = null): Game {
+  const seat = g.seats.find((s) => s.id === id);
+  if (!seat || seat.lives < 0) return g;
+  let lives = seat.lives - 1;
+  let zeroGoneBy = g.zeroGoneBy;
+  if (lives === 0 && zeroGoneBy) lives = -1;
+  if (lives === -1 && !zeroGoneBy && !g.seats.some((s) => s.id !== id && s.lives === 0)) zeroGoneBy = id;
+  return move(g, seat, lives, zeroGoneBy, kind, from);
+}
+
+// Sumar una vida (también sirve para deshacer un BUST por error)
+export function heal(g: Game, id: string): Game {
+  const seat = g.seats.find((s) => s.id === id);
+  if (!seat) return g;
+  if (seat.lives >= 0) return move(g, seat, seat.lives + 1, g.zeroGoneBy, "vida", null);
+  const restores = !g.zeroGoneBy || g.zeroGoneBy === id;
+  return move(g, seat, restores ? 0 : 1, g.zeroGoneBy === id ? null : g.zeroGoneBy, "vida", null);
 }
 
 // Sube lo que falte. Todo son upserts con ids del móvil, así que repetir es inocuo.

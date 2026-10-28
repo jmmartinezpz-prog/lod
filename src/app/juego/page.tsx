@@ -3,15 +3,48 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Status } from "@/components/Status";
 import { useLeague } from "@/lib/useLeague";
-import { newGame, PALETTE as COLORS, syncGame, uuid, type Game } from "@/lib/partidas";
+import { heal, hit, newGame, PALETTE as COLORS, syncGame, type Game, type Seat } from "@/lib/partidas";
 
-const PRESETS = [10, 20, 30, 40];
+const NORMAL = 6;
+const SOBRANTES = 8;
 const STORAGE_KEY = "lod-juego";
 
 type Update = (fn: (g: Game | null) => Game | null) => void;
+type Picker = { mode: "lanzar" | "recibir"; seat: Seat };
 
 const tileBg = (color: string) =>
   `radial-gradient(circle at 30% 20%, color-mix(in srgb, ${color} 85%, white), ${color} 45%, color-mix(in srgb, ${color} 60%, black))`;
+
+// Parte el nombre en 1 o 2 líneas equilibradas y calcula una letra que quepa entera en la carta.
+function fitName(name: string, maxCqmin: number, widthCqw = 84) {
+  const words = name.split(" ");
+  let lines = [name];
+  if ([...name].length > 10 && words.length > 1) {
+    let best = Infinity;
+    for (let i = 1; i < words.length; i++) {
+      const a = words.slice(0, i).join(" ");
+      const b = words.slice(i).join(" ");
+      const len = Math.max([...a].length, [...b].length);
+      if (len < best) {
+        best = len;
+        lines = [a, b];
+      }
+    }
+  }
+  const longest = Math.max(...lines.map((l) => [...l].length));
+  return { lines, fontSize: `min(${maxCqmin}cqmin, ${(widthCqw / (longest * 0.58)).toFixed(2)}cqw)` };
+}
+
+function FitName({ name, max, className = "" }: { name: string; max: number; className?: string }) {
+  const { lines, fontSize } = fitName(name, max);
+  return (
+    <span className={`block text-center font-semibold leading-[1.05] ${className}`} style={{ fontSize }}>
+      {lines.map((l) => (
+        <span key={l} className="block whitespace-nowrap">{l}</span>
+      ))}
+    </span>
+  );
+}
 
 export default function Juego() {
   const [game, setGame] = useState<Game | null>(null);
@@ -20,8 +53,13 @@ export default function Juego() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
       // Las partidas de versiones anteriores (sin id) no se pueden guardar en las estadísticas
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (saved?.id && saved.pending) setGame(saved);
+      if (saved?.id && saved.pending)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setGame({
+          ...saved,
+          zeroGoneBy: saved.zeroGoneBy ?? null,
+          pending: saved.pending.map((m: Game["pending"][number]) => ({ ...m, kind: m.kind ?? "vida", from_jugador_id: m.from_jugador_id ?? null })),
+        });
     } catch {}
   }, []);
 
@@ -41,7 +79,7 @@ export default function Juego() {
 
 function Setup({ onStart }: { onStart: (g: Game) => void }) {
   const { players, loading, error } = useLeague();
-  const [start, setStart] = useState(20);
+  const [start, setStart] = useState(NORMAL);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [colorOf, setColorOf] = useState<Record<string, string>>({});
   const [wildcards, setWildcards] = useState<{ id: string; name: string }[]>([]);
@@ -86,41 +124,53 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h1 className="text-3xl font-black">⚔️ Modo juego</h1>
-        <p className="text-sm text-muted">Elige vidas y jugadores, y a jugar</p>
-      </div>
+  const mode = start === NORMAL ? "normal" : start === SOBRANTES ? "sobrantes" : "corta";
 
-      <section className="rounded-2xl border border-line bg-card p-5 text-center">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted">Vidas iniciales</p>
-        <div className="flex items-center justify-center gap-5">
-          <button onClick={() => setStart((v) => Math.max(1, v - 1))} className="h-14 w-14 rounded-full border border-line text-3xl active:scale-95">−</button>
-          <div className="min-w-28">
-            <span className="tabular text-6xl font-black text-gold">{start}</span>
-            <span className="ml-1 text-3xl">❤️</span>
-          </div>
-          <button onClick={() => setStart((v) => v + 1)} className="h-14 w-14 rounded-full border border-line text-3xl active:scale-95">+</button>
-        </div>
-        <div className="mt-4 flex justify-center gap-2">
-          {PRESETS.map((v) => (
+  return (
+    <div className="space-y-5">
+      <h1 className="text-2xl font-bold">⚔️ Modo juego</h1>
+
+      <section className="rounded-2xl border border-line bg-card p-4">
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { v: NORMAL, label: "Normal", on: mode === "normal" },
+            { v: SOBRANTES, label: "Sobrantes", on: mode === "sobrantes" },
+          ].map((o) => (
             <button
-              key={v}
-              onClick={() => setStart(v)}
-              className={`rounded-full px-4 py-1.5 text-sm font-bold ${start === v ? "bg-gold text-felt" : "border border-line text-muted"}`}
+              key={o.label}
+              onClick={() => setStart(o.v)}
+              className={`rounded-xl py-3 font-semibold transition ${o.on ? "bg-gold text-felt" : "border border-line text-muted"}`}
             >
-              {v}
+              {o.label}
+              <span className="block text-xs font-medium opacity-80">{o.v} vidas</span>
             </button>
           ))}
+        </div>
+
+        <div className="mt-5 text-center">
+          <span className="tabular text-6xl font-bold text-gold">{start}</span>
+          <span className="ml-1 text-2xl">❤️</span>
+          <p className="text-xs text-muted">{mode === "corta" ? "Partida a medida" : "+ la vida cero"}</p>
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={12}
+          value={start}
+          onChange={(e) => setStart(Number(e.target.value))}
+          aria-label="Vidas iniciales"
+          className="mt-3 h-10 !border-0 !bg-transparent !p-0 accent-[var(--gold)]"
+        />
+        <div className="flex justify-between text-xs text-muted">
+          <span>1</span>
+          <span>desliza para una partida corta</span>
+          <span>12</span>
         </div>
       </section>
 
       <section className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted">
-          Jugadores · toca para quitar, 🎨 para cambiar color
-        </p>
-        <div className="grid grid-cols-2 gap-3">
+        <p className="text-sm text-muted">Jugadores · toca para quitar, 🎨 para cambiar color</p>
+        <div className="grid grid-cols-2 gap-2.5">
           {candidates.map((c) => {
             const on = !excluded.has(c.id);
             const isWild = c.id.startsWith("wc-");
@@ -128,10 +178,10 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
               <div
                 key={c.id}
                 className={`relative h-24 overflow-hidden rounded-2xl shadow-lg transition ${on ? "" : "opacity-30 grayscale"}`}
-                style={{ background: tileBg(color(c.id)) }}
+                style={{ background: tileBg(color(c.id)), containerType: "size" }}
               >
-                <button onClick={() => toggle(c.id)} className="flex h-full w-full items-end p-3 text-left">
-                  <span className="truncate text-lg font-black text-white [text-shadow:0_1px_4px_rgba(0,0,0,.5)]">{c.name}</span>
+                <button onClick={() => toggle(c.id)} className="flex h-full w-full items-end px-3 pb-2.5 pt-10 text-white">
+                  <FitName name={c.name} max={22} className="w-full [text-shadow:0_1px_4px_rgba(0,0,0,.45)]" />
                 </button>
                 <button
                   onClick={() => cycleColor(c.id)}
@@ -164,9 +214,9 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
           <button
             onClick={addWildcard}
             disabled={!wildName.trim()}
-            className="whitespace-nowrap rounded-lg border border-gold px-4 font-bold text-gold disabled:opacity-40"
+            className="whitespace-nowrap rounded-lg border border-gold px-3 text-sm font-semibold text-gold disabled:opacity-40"
           >
-            🃏 Añadir wildcard
+            🃏 Añadir
           </button>
         </div>
       </section>
@@ -174,7 +224,7 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
       <button
         onClick={begin}
         disabled={seated.length < 2}
-        className="w-full rounded-2xl bg-gold py-4 text-lg font-black text-felt shadow-lg active:scale-[.99] disabled:opacity-40"
+        className="w-full rounded-2xl bg-gold py-4 text-lg font-bold text-felt shadow-lg active:scale-[.99] disabled:opacity-40"
       >
         ¡Empezar! · {seated.length} jugadores
       </button>
@@ -186,33 +236,39 @@ function Board({ game, update }: { game: Game; update: Update }) {
   const rows = useRows(game.seats.length);
   const [deltas, setDeltas] = useState<Record<string, number>>({});
   const [dismissed, setDismissed] = useState<string | null>(null);
+  const [picker, setPicker] = useState<Picker | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const sync = useSync(game, update);
   useWakeLock();
 
-  function add(id: string, delta: number) {
-    const seat = game.seats.find((s) => s.id === id)!;
-    const lives = Math.max(0, seat.lives + delta);
-    if (lives === seat.lives) return;
-    update((g) =>
-      g && {
-        ...g,
-        seats: g.seats.map((s) => (s.id === id ? { ...s, lives } : s)),
-        pending: [
-          ...g.pending,
-          { id: uuid(), partida_id: g.id, jugador_id: id, delta: lives - seat.lives, lives_after: lives, created_at: new Date().toISOString() },
-        ],
-      },
-    );
-    setDeltas((cur) => ({ ...cur, [id]: (cur[id] ?? 0) + lives - seat.lives }));
+  function flash(text: string) {
+    setToast(text);
+    clearTimeout(timers.current.toast);
+    timers.current.toast = setTimeout(() => setToast(null), 2200);
+  }
+
+  function apply(id: string, next: Game) {
+    const before = game.seats.find((s) => s.id === id)!.lives;
+    const after = next.seats.find((s) => s.id === id)!.lives;
+    if (before === after) return;
+    update((g) => (g?.id === next.id ? next : g));
+    if (!game.zeroGoneBy && next.zeroGoneBy) flash("🚫 Se acabó la vida cero para todos");
+    setDeltas((cur) => ({ ...cur, [id]: (cur[id] ?? 0) + after - before }));
     clearTimeout(timers.current[id]);
     timers.current[id] = setTimeout(() => {
       setDeltas((cur) => {
-        const next = { ...cur };
-        delete next[id];
-        return next;
+        const rest = { ...cur };
+        delete rest[id];
+        return rest;
       });
     }, 1500);
+  }
+
+  function piscina(thrower: Seat, victim: Seat) {
+    setPicker(null);
+    apply(victim.id, hit(game, victim.id, "piscina", thrower.id));
+    flash(`🏊 ${thrower.name} → 💧 ${victim.name}`);
   }
 
   // Cierra la partida en Supabase; si no se puede, deja elegir entre salir igual o seguir.
@@ -233,7 +289,7 @@ function Board({ game, update }: { game: Game; update: Update }) {
     finish(() => null);
   }
 
-  const alive = game.seats.filter((s) => s.lives > 0);
+  const alive = game.seats.filter((s) => s.lives >= 0);
   const winner = game.seats.length > 1 && alive.length === 1 ? alive[0] : null;
 
   const grid = rows.map((size, r) => {
@@ -242,68 +298,158 @@ function Board({ game, update }: { game: Game; update: Update }) {
   });
 
   return (
-    <div className="fixed inset-0 z-30 flex select-none flex-col gap-1 bg-black p-1">
+    <div
+      className="fixed inset-0 z-30 flex select-none flex-col gap-1 bg-black"
+      style={{ padding: "max(4px, env(safe-area-inset-top)) max(4px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left))" }}
+    >
       {grid.map((row, r) => (
         <div key={r} className="flex min-h-0 flex-1 gap-1">
           {row.map((s) => {
             const d = deltas[s.id];
-            const dead = s.lives === 0;
+            const bust = s.lives < 0;
+            const zero = s.lives === 0;
             return (
               <div
                 key={s.id}
-                className={`relative flex min-w-0 flex-1 overflow-hidden rounded-2xl shadow-[inset_0_0_40px_rgba(0,0,0,.35)] transition ${dead ? "opacity-40 grayscale" : ""}`}
+                className={`relative flex min-w-0 flex-1 overflow-hidden rounded-2xl shadow-[inset_0_0_40px_rgba(0,0,0,.3)] ${zero ? "ring-4 ring-inset ring-white/70" : ""}`}
                 style={{ background: tileBg(s.color), containerType: "size" }}
               >
-                <button onClick={() => add(s.id, -1)} aria-label={`Quitar vida a ${s.name}`} className="flex w-1/2 items-center justify-start pl-[5cqmin] text-[16cqmin] font-black text-white/35 active:bg-black/20">
-                  −
+                {bust && <div className="absolute inset-0 bg-[#111]/85" />}
+                <button onClick={() => apply(s.id, hit(game, s.id))} aria-label={`Quitar vida a ${s.name}`} className="relative flex w-1/2 items-center justify-start pl-[4cqmin] text-[14cqmin] font-light text-white/40 active:bg-black/20">
+                  {bust ? "" : "−"}
                 </button>
-                <button onClick={() => add(s.id, 1)} aria-label={`Sumar vida a ${s.name}`} className="flex w-1/2 items-center justify-end pr-[5cqmin] text-[16cqmin] font-black text-white/35 active:bg-white/15">
+                <button onClick={() => apply(s.id, heal(game, s.id))} aria-label={`Sumar vida a ${s.name}`} className="relative flex w-1/2 items-center justify-end pr-[4cqmin] text-[14cqmin] font-light text-white/40 active:bg-white/15">
                   +
                 </button>
-                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-white [text-shadow:0_2px_10px_rgba(0,0,0,.45)]">
-                  <span className="max-w-[80%] truncate text-[11cqmin] font-black uppercase leading-tight tracking-wide">{s.name}</span>
-                  <span key={s.lives} className="tabular animate-pop text-[48cqmin] font-black leading-none">
-                    {dead ? "💀" : s.lives}
-                  </span>
-                  {d !== undefined && (
-                    <span className={`absolute right-[22%] top-[22%] rounded-full px-[3cqmin] text-[10cqmin] font-black ${d > 0 ? "bg-white/30" : "bg-black/35"}`}>
-                      {d > 0 ? `+${d}` : `−${-d}`}
-                    </span>
-                  )}
+
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-between px-[6cqmin] pb-[4cqmin] pt-[6cqmin] text-white [text-shadow:0_2px_8px_rgba(0,0,0,.35)]">
+                  <FitName name={s.name} max={11} className={`w-full ${bust ? "text-white/60" : ""}`} />
+
+                  <div className="flex flex-col items-center">
+                    {bust ? (
+                      <>
+                        <span className="text-[30cqmin] leading-none">💀</span>
+                        <span className="text-[15cqmin] font-extrabold leading-none tracking-wide text-[#ff4040] [text-shadow:0_0_18px_rgba(255,40,40,.6)]">BUST!</span>
+                      </>
+                    ) : (
+                      <>
+                        <span key={s.lives} className="tabular animate-pop text-[44cqmin] font-bold leading-[0.9]">{s.lives}</span>
+                        {zero && <span className="rounded-full bg-white/90 px-[3cqmin] text-[6cqmin] font-bold text-black [text-shadow:none]">VIDA CERO</span>}
+                      </>
+                    )}
+                  </div>
+
+                  <div className="pointer-events-auto flex gap-[3cqmin]">
+                    {!bust && (
+                      <>
+                        <button
+                          onClick={() => setPicker({ mode: "lanzar", seat: s })}
+                          aria-label={`${s.name} lanza una piscina`}
+                          className="flex h-[max(40px,13cqmin)] w-[max(40px,13cqmin)] items-center justify-center rounded-full bg-black/25 text-[max(20px,7cqmin)] active:scale-90"
+                        >
+                          🏊
+                        </button>
+                        {s.playerId && (
+                          <button
+                            onClick={() => setPicker({ mode: "recibir", seat: s })}
+                            aria-label={`${s.name} recibe una piscina`}
+                            className="flex h-[max(40px,13cqmin)] w-[max(40px,13cqmin)] items-center justify-center rounded-full bg-black/25 text-[max(20px,7cqmin)] active:scale-90"
+                          >
+                            💧
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
+
+                {d !== undefined && (
+                  <span className={`pointer-events-none absolute right-[8cqmin] top-[30%] rounded-full px-[3cqmin] text-[9cqmin] font-bold text-white ${d > 0 ? "bg-white/30" : "bg-black/40"}`}>
+                    {d > 0 ? `+${d}` : `−${-d}`}
+                  </span>
+                )}
               </div>
             );
           })}
         </div>
       ))}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center pt-2">
-        <div className="pointer-events-auto flex items-center gap-1 rounded-full bg-black/50 p-1 backdrop-blur">
+
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center" style={{ paddingTop: "max(8px, env(safe-area-inset-top))" }}>
+        <div className="pointer-events-auto flex items-center gap-1 rounded-full bg-black/55 p-1 text-white backdrop-blur">
+          <span className="px-2 text-xs text-white/80" title="Vida cero">{game.zeroGoneBy ? "0 🚫" : "0 ✓"}</span>
           <span
             title={sync.error ?? undefined}
-            className="px-2 text-xs text-white/70"
+            className="px-1 text-xs text-white/70"
             onClick={() => sync.error && alert(`Sin guardar: ${sync.error}`)}
           >
             {sync.pending ? `⏳ ${sync.pending}` : "☁️ ✓"}
           </span>
-          <button onClick={rematch} aria-label="Nueva partida" className="h-9 w-9 rounded-full text-lg text-white">↺</button>
-          <button onClick={exit} aria-label="Terminar" className="h-9 w-9 rounded-full text-lg text-white">✕</button>
+          <button onClick={rematch} aria-label="Nueva partida" className="h-9 w-9 rounded-full text-lg">↺</button>
+          <button onClick={exit} aria-label="Terminar" className="h-9 w-9 rounded-full text-lg">✕</button>
         </div>
       </div>
 
-      {winner && dismissed !== winner.id && (
+      {toast && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-[12%] z-20 flex justify-center px-4">
+          <p className="rounded-2xl bg-black/80 px-4 py-2.5 text-center text-base font-semibold text-white shadow-xl backdrop-blur">{toast}</p>
+        </div>
+      )}
+
+      {picker && <PiscinaPicker picker={picker} seats={game.seats} onPick={piscina} onClose={() => setPicker(null)} />}
+
+      {winner && !picker && dismissed !== winner.id && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
-          <div className="w-full max-w-sm space-y-4 rounded-3xl p-6 text-center text-white shadow-2xl" style={{ background: tileBg(winner.color) }}>
+          <div className="w-full max-w-sm space-y-4 rounded-3xl p-6 text-center text-white shadow-2xl" style={{ background: tileBg(winner.color), containerType: "inline-size" }}>
             <p className="text-6xl">🏆</p>
-            <p className="text-3xl font-black uppercase [text-shadow:0_2px_10px_rgba(0,0,0,.45)]">{winner.name}</p>
-            <p className="font-semibold">gana con {winner.lives} {winner.lives === 1 ? "vida" : "vidas"}</p>
+            <FitName name={winner.name} max={14} className="text-[2rem] font-bold [text-shadow:0_2px_10px_rgba(0,0,0,.4)]" />
+            <p className="font-medium">
+              gana {winner.lives === 0 ? "en vida cero" : `con ${winner.lives} ${winner.lives === 1 ? "vida" : "vidas"}`}
+            </p>
             <div className="grid gap-2 pt-2">
-              <button onClick={rematch} className="rounded-xl bg-white py-3 font-black text-black">↺ Otra partida</button>
-              <button onClick={exit} className="rounded-xl bg-black/30 py-3 font-bold">Terminar</button>
+              <button onClick={rematch} className="rounded-xl bg-white py-3 font-bold text-black">↺ Otra partida</button>
+              <button onClick={exit} className="rounded-xl bg-black/30 py-3 font-semibold">Terminar</button>
               <button onClick={() => setDismissed(winner.id)} className="py-1 text-sm text-white/80">Seguir jugando</button>
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Lanzar: el que pulsa elige a quién (solo jugadores de liga). Recibir: el que pulsa elige quién se la lanzó.
+function PiscinaPicker({ picker, seats, onPick, onClose }: {
+  picker: Picker;
+  seats: Seat[];
+  onPick: (thrower: Seat, victim: Seat) => void;
+  onClose: () => void;
+}) {
+  const { mode, seat } = picker;
+  const options = seats.filter((s) => s.id !== seat.id && s.lives >= 0 && (mode === "recibir" || s.playerId));
+  return (
+    <div className="absolute inset-0 z-20 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <div className="w-full max-w-md space-y-3 rounded-3xl bg-felt p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <p className="text-center text-lg font-semibold text-ink">
+          {mode === "lanzar" ? `🏊 ¿A quién le lanza la piscina ${seat.name}?` : `💧 ¿Quién le ha lanzado la piscina a ${seat.name}?`}
+        </p>
+        {options.length === 0 ? (
+          <p className="py-4 text-center text-muted">No hay a quién</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {options.map((o) => (
+              <button
+                key={o.id}
+                onClick={() => (mode === "lanzar" ? onPick(seat, o) : onPick(o, seat))}
+                className="flex h-20 items-center rounded-2xl px-3 text-white shadow-lg active:scale-95"
+                style={{ background: tileBg(o.color), containerType: "inline-size" }}
+              >
+                <FitName name={o.name} max={60} className="w-full text-lg [text-shadow:0_1px_4px_rgba(0,0,0,.4)]" />
+              </button>
+            ))}
+          </div>
+        )}
+        <button onClick={onClose} className="w-full rounded-xl border border-line py-3 font-semibold text-muted">Cancelar</button>
+      </div>
     </div>
   );
 }
