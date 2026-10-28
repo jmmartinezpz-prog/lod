@@ -186,8 +186,9 @@ export function playerStats(opts: {
 
   const jornadaById = new Map(jornadas.filter((j) => inRange(j.played_on, range)).map((j) => [j.id, j]));
   const jornadaDay = new Map(jornadas.map((j) => [j.id, j.played_on as string | null]));
-  const porJornada = new Map<string, number>(); // jugadores en cada jornada (para saber quién fue último)
-  for (const r of results) porJornada.set(r.jornada_id, (porJornada.get(r.jornada_id) ?? 0) + 1);
+  // Último puesto de cada jornada (con invitados del modo juego puede haber huecos: vale el puesto más alto)
+  const porJornada = new Map<string, number>();
+  for (const r of results) porJornada.set(r.jornada_id, Math.max(porJornada.get(r.jornada_id) ?? 0, r.position));
   const myResults = results
     .filter((r) => jornadaById.has(r.jornada_id))
     .sort((a, b) => jornadaById.get(a.jornada_id)!.number - jornadaById.get(b.jornada_id)!.number);

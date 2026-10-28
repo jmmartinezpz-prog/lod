@@ -635,8 +635,8 @@ function Individual({ history, stats, standings, focus, onFocus, sanciones, fina
         ["Mejor puesto", lead.mejorPuesto ? `${lead.mejorPuesto}º` : "–"],
         ["Peor puesto", lead.peorPuesto ? `${lead.peorPuesto}º` : "–"],
         ["Mayor ventaja de líder", lead.maxVentaja ? `+${lead.maxVentaja.pts} (J${lead.maxVentaja.jornada})` : "–"],
-        ["Jornadas último 🏮", `${lead.jornadasUltimo} de ${totalJ}`],
-        ["Días último 🏮", `${lead.diasUltimo} de ${totalD}`],
+        ["🏮 Último en la general (jornadas)", `${lead.jornadasUltimo} de ${totalJ}`],
+        ["🏮 Farolillo rojo (días)", `${lead.diasUltimo} de ${totalD}`],
       ],
     },
     {
