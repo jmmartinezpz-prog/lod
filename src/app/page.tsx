@@ -52,13 +52,14 @@ export default function Clasificacion() {
       {!loading && !error && (
         <>
           {/* Cabecera de columnas solo en ordenador */}
-          <div className="hidden grid-cols-[3rem_minmax(0,1fr)_repeat(5,5.5rem)_6rem] items-center gap-3 px-4 text-xs text-muted lg:grid">
+          <div className="hidden grid-cols-[3rem_minmax(0,1fr)_repeat(6,5.5rem)_6rem] items-center gap-3 px-4 text-xs text-muted lg:grid">
             <span>#</span>
             <span>Jugador</span>
             <span className="text-right">🏆 Victorias</span>
             <span className="text-right">🥉 Podios</span>
             <span className="text-right">🏊 Entregadas</span>
             <span className="text-right">💧 Recibidas</span>
+            <span className="text-right">± Balance</span>
             <span className="text-right">🎲 Jornadas</span>
             <span className="text-right">Puntos</span>
           </div>
@@ -72,7 +73,7 @@ export default function Clasificacion() {
               return (
                 <li
                   key={s.player.id}
-                  className={`rounded-2xl border p-3 lg:grid lg:grid-cols-[3rem_minmax(0,1fr)_repeat(5,5.5rem)_6rem] lg:items-center lg:gap-3 lg:px-4 ${
+                  className={`rounded-2xl border p-3 lg:grid lg:grid-cols-[3rem_minmax(0,1fr)_repeat(6,5.5rem)_6rem] lg:items-center lg:gap-3 lg:px-4 ${
                     i === 0 ? "border-gold/60 bg-gold/10" : "border-line bg-card"
                   }`}
                 >
@@ -106,6 +107,7 @@ export default function Clasificacion() {
                         <Chip>🥉 {s.podios}</Chip>
                         <Chip>🏊 {s.piscinas}</Chip>
                         <Chip>💧 {s.recibidas}</Chip>
+                        <Chip><Balance n={s.balance} /></Chip>
                         <Chip>🎲 {s.played}</Chip>
                       </p>
                     </div>
@@ -113,9 +115,11 @@ export default function Clasificacion() {
                     <span className="tabular text-3xl font-bold lg:hidden">{s.points}</span>
                   </div>
 
-                  {[s.wins, s.podios, s.piscinas, s.recibidas, s.played].map((v, k) => (
+                  {[s.wins, s.podios, s.piscinas, s.recibidas].map((v, k) => (
                     <span key={k} className="tabular hidden text-right text-lg lg:block">{v}</span>
                   ))}
+                  <span className="tabular hidden text-right text-lg font-semibold lg:block"><Balance n={s.balance} /></span>
+                  <span className="tabular hidden text-right text-lg lg:block">{s.played}</span>
                   <span className="tabular hidden text-right text-3xl font-bold lg:block">{s.points}</span>
                 </li>
               );
@@ -123,7 +127,7 @@ export default function Clasificacion() {
           </ol>
 
           <p className="text-center text-xs text-muted lg:hidden">
-            🏆 victorias · 🥉 podios · 🏊 piscinas entregadas · 💧 recibidas · 🎲 jornadas jugadas
+            🏆 victorias · 🥉 podios · 🏊 piscinas entregadas · 💧 recibidas · ± balance (entregadas − recibidas) · 🎲 jornadas jugadas
           </p>
         </>
       )}
@@ -133,4 +137,12 @@ export default function Clasificacion() {
 
 function Chip({ children }: { children: React.ReactNode }) {
   return <span className="tabular rounded-full bg-felt px-2 py-0.5 text-ink">{children}</span>;
+}
+
+function Balance({ n }: { n: number }) {
+  return (
+    <span className={n > 0 ? "text-[#4caf7d]" : n < 0 ? "text-red" : "text-muted"}>
+      {n > 0 ? `+${n}` : n}
+    </span>
+  );
 }

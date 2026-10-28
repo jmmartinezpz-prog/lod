@@ -11,6 +11,7 @@ export type Standing = {
   wins: number;
   piscinas: number; // entregadas
   recibidas: number;
+  balance: number; // entregadas - recibidas
   podios: number;
   autopiscinas: number;
   historia: number;
@@ -91,6 +92,11 @@ export function useLeague() {
           recibidas: events
             .filter((e) => e.kind === "piscina" && e.target_player_id === player.id)
             .reduce((s, e) => s + e.value, 0),
+          balance:
+            sum("piscina") -
+            events
+              .filter((e) => e.kind === "piscina" && e.target_player_id === player.id)
+              .reduce((s, e) => s + e.value, 0),
           podios: mine.filter((r) => r.position <= 3).length,
           autopiscinas: sum("autopiscina"),
           historia: sum("historia"),
