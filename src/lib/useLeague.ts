@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { supabase, supabaseConfigured } from "./supabase";
+import { escucharCambios, supabase, supabaseConfigured } from "./supabase";
 import type { Adjustment, Dia, Jornada, League, LeagueEvent, Player, Result } from "./types";
 
 export type Standing = {
@@ -63,14 +63,7 @@ export function useLeague() {
     load();
     if (!supabaseConfigured) return;
     // Solo las tablas de la liga: los movimientos del modo juego no deben recargarla
-    let channel = supabase.channel("lod-live");
-    for (const table of ["players", "dias", "jornadas", "results", "adjustments", "events", "league"]) {
-      channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, () => load());
-    }
-    channel.subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return escucharCambios("lod-live", ["players", "dias", "jornadas", "results", "adjustments", "events", "league"], load);
   }, [load]);
 
   const standings = useMemo<Standing[]>(() => {

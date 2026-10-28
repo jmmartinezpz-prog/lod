@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { supabase, supabaseConfigured } from "./supabase";
+import { escucharCambios, supabase, supabaseConfigured } from "./supabase";
 import type { LeagueHistory } from "./history";
 import type { Resumen } from "./stats";
 import type { Adjustment, Jornada, LeagueEvent, Player, Result } from "./types";
@@ -39,10 +39,7 @@ export function usePeriodicos() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     if (!supabaseConfigured) return;
-    const channel = supabase.channel("lod-prensa").on("postgres_changes", { event: "*", schema: "public", table: "periodicos" }, () => load()).subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return escucharCambios("lod-prensa", ["periodicos"], load);
   }, [load]);
 
   const todos = [...subidos, ...ARCHIVO].sort((a, b) => b.fecha.localeCompare(a.fecha));

@@ -18,8 +18,8 @@ export function MeterLlave({ permiso, que }: { permiso: Permiso; que: string }) 
 
   return (
     <div className="space-y-2 rounded-2xl border border-gold/60 bg-gold/10 p-4">
-      <p className="font-semibold">🔑 Este móvil no tiene llave</p>
-      <p className="text-sm text-muted">Puedes verlo todo, pero para {que} hace falta tu llave. Pídesela al admin; solo hay que meterla una vez y da igual mayúsculas o guiones.</p>
+      <p className="font-semibold">🔑 Mete tu llave</p>
+      <p className="text-sm text-muted">Para {que} hace falta tu llave. Pídesela al admin; solo hay que meterla una vez y da igual mayúsculas o guiones.</p>
       <div className="flex gap-2">
         <input
           value={code}

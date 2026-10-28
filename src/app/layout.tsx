@@ -3,6 +3,7 @@ import { Outfit } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import RegistrarSW from "@/components/RegistrarSW";
+import Puerta from "@/components/Puerta";
 
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
 
@@ -24,8 +25,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="es" className={`h-full antialiased ${outfit.variable}`}>
       <body className="min-h-full flex flex-col">
         <RegistrarSW />
-        <Nav />
-        <main className="w-full flex-1 px-4 pb-28 pt-4 sm:px-6 lg:px-10">{children}</main>
+        <Puerta>
+          <Nav />
+          <main className="w-full flex-1 px-4 pb-28 pt-4 sm:px-6 lg:px-10">{children}</main>
+        </Puerta>
       </body>
     </html>
   );

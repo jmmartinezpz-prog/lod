@@ -30,3 +30,19 @@ export const supabase = createClient(
     },
   },
 );
+
+// Leer también exige llave (14_solo_con_llave.sql), pero el tiempo real no la lleva.
+// Así que se escucha la tabla pública "cambios" (solo dice qué tabla ha cambiado)
+// y quien la escucha recarga por la API normal, que sí lleva la llave.
+export function escucharCambios(nombre: string, tablas: string[], alCambiar: () => void) {
+  const channel = supabase
+    .channel(nombre)
+    .on("postgres_changes", { event: "*", schema: "public", table: "cambios" }, (p) => {
+      const tabla = (p.new as { tabla?: string } | null)?.tabla;
+      if (tabla && tablas.includes(tabla)) alCambiar();
+    })
+    .subscribe();
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}

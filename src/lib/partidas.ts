@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { supabase, supabaseConfigured } from "./supabase";
+import { escucharCambios, supabase, supabaseConfigured } from "./supabase";
 import { defaultPoints } from "./scoring";
 import type { JornadaKind } from "./types";
 
@@ -233,14 +233,10 @@ export function usePartidas() {
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(load, 400);
     };
-    let channel = supabase.channel("lod-juego");
-    for (const table of ["partidas", "partida_jugadores", "partida_movimientos"]) {
-      channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, schedule);
-    }
-    channel.subscribe();
+    const dejar = escucharCambios("lod-juego", ["partidas", "partida_jugadores", "partida_movimientos"], schedule);
     return () => {
       if (timer.current) clearTimeout(timer.current);
-      supabase.removeChannel(channel);
+      dejar();
     };
   }, [load]);
 
