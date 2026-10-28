@@ -9,6 +9,7 @@ import { playerLabel } from "@/lib/history";
 import { esCampeon, Starred } from "@/components/Status";
 import { MeterLlave, QuienApunta } from "@/components/Llave";
 import { usePermiso } from "@/lib/llave";
+import { supabase } from "@/lib/supabase";
 
 const NORMAL = 6;
 const SOBRANTES = 8;
@@ -35,7 +36,7 @@ function saveOrder(ids: string[]) {
   } catch {}
 }
 
-const COLORS_KEY = "lod-colores"; // color de cada jugador: se mantiene de una partida a otra
+const COLORS_KEY = "lod-colores"; // copia en el móvil por si aún no está 17_colores.sql
 
 function readColors(): Record<string, string> {
   try {
@@ -48,6 +49,12 @@ function saveColors(colors: Record<string, string>) {
   try {
     localStorage.setItem(COLORS_KEY, JSON.stringify(colors));
   } catch {}
+}
+
+// Guarda el color en la liga para que salga igual en todos los móviles
+async function ponerColor(playerId: string, hex: string) {
+  const { error } = await supabase.rpc("poner_color", { p_player: playerId, p_color: hex });
+  return error?.message ?? null;
 }
 
 function moveTo<T>(list: T[], from: number, to: number) {
@@ -218,7 +225,8 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   const [start, setStart] = useState(NORMAL);
   const [kind, setKind] = useState<JornadaKind>("normal");
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
-  const [colorOf, setColorOf] = useState<Record<string, string>>({});
+  const [colorOf, setColorOf] = useState<Record<string, string>>({}); // copia local
+  const [picks, setPicks] = useState<Record<string, string>>({}); // cambiados ahora con 🎨
   const [painting, setPainting] = useState<string | null>(null); // jugador eligiendo color
   const [wildcards, setWildcards] = useState<{ id: string; name: string }[]>([]);
   const [wildName, setWildName] = useState("");
@@ -244,9 +252,14 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   const candidates = [...regulars, ...wildcards].map((c, i) => ({ c, i })).sort((a, b) => pos(a.c.id) - pos(b.c.id) || a.i - b.i).map(({ c }) => c);
   const seated = candidates.filter((c) => !excluded.has(c.id));
   // Los colores no dependen de dónde se siente cada uno: orden fijo de la liga, y los elegidos se recuerdan
+  const elegidos = {
+    ...colorOf,
+    ...Object.fromEntries(players.flatMap((p) => (p.color ? [[p.id, p.color]] : []))),
+    ...picks,
+  };
   const assigned = assignColors(
     [...regulars, ...wildcards].sort((a, b) => Number(excluded.has(a.id)) - Number(excluded.has(b.id))).map((c) => c.id),
-    colorOf,
+    elegidos,
   );
   const color = (id: string) => assigned.get(id)!;
   // Dueño de cada color entre los que juegan (para bloquearlo a los demás)
@@ -263,12 +276,18 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
 
   function pickColor(id: string, hex: string) {
     // Si lo tenía alguien que no juega, ese se queda con otro libre automáticamente
+    setPicks((cur) => {
+      const next = { ...cur, [id]: hex };
+      for (const k of Object.keys(next)) if (k !== id && next[k] === hex) delete next[k];
+      return next;
+    });
     setColorOf((cur) => {
       const next = { ...cur, [id]: hex };
       for (const k of Object.keys(next)) if (k !== id && next[k] === hex) delete next[k];
       saveColors(next);
       return next;
     });
+    if (!id.startsWith("wc-")) ponerColor(id, hex);
     setPainting(null);
   }
 
@@ -280,9 +299,12 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   }
 
   function begin() {
-    // Cada jugador de la liga se queda con su color para las próximas partidas
+    // Cada jugador de la liga se queda con su color para las próximas partidas, en todos los móviles
     const fijos = { ...colorOf };
-    for (const r of regulars) fijos[r.id] = color(r.id);
+    for (const r of regulars) {
+      fijos[r.id] = color(r.id);
+      if (players.find((p) => p.id === r.id)?.color !== color(r.id)) ponerColor(r.id, color(r.id));
+    }
     saveColors(fijos);
     onStart(
       newGame(

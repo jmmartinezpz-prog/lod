@@ -7,6 +7,7 @@ export type Player = {
   seat_order: number | null;
   mundiales?: number; // estrellas junto al nombre (07_mundiales.sql)
   campeon?: boolean; // campeón del mundo vigente
+  color?: string | null; // su color en el modo juego, el mismo en todos los móviles (17_colores.sql)
 };
 
 export type JornadaKind = "normal" | "sobrante";
