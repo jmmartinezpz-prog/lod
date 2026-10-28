@@ -15,11 +15,12 @@ export type Periodico = {
   src?: string; // archivo estático en /public
 };
 
+// Días con la numeración de la app (el antiguo día 1 son los días 1, 2 y 3: 22_dias_1_2_3.sql)
 export const ARCHIVO: Periodico[] = [
-  { id: "a-guerritas", titulo: "¡El Guerritas lo seca todo!", fecha: "2026-10-06", dia_number: 3, src: "/napicol/2026-10-06-guerritas-cumpleanos.html" },
+  { id: "a-guerritas", titulo: "¡El Guerritas lo seca todo!", fecha: "2026-10-06", dia_number: 5, src: "/napicol/2026-10-06-guerritas-cumpleanos.html" },
   { id: "a-puchades", titulo: "Exclusiva: ¡Victimilla es Puchades!", fecha: "2026-10-08", dia_number: null, src: "/napicol/2026-10-08-victimilla-puchades.html" },
-  { id: "a-arrasa", titulo: "¡Victimilla arrasa!", fecha: "2026-10-22", dia_number: 6, src: "/napicol/2026-10-22-victimilla-arrasa.html" },
-  { id: "a-lutero", titulo: "¡Martín Lutero reforma la Liga!", fecha: "2026-10-28", dia_number: 7, src: "/napicol/2026-10-28-lutero-reforma.html" },
+  { id: "a-arrasa", titulo: "¡Victimilla arrasa!", fecha: "2026-10-22", dia_number: 8, src: "/napicol/2026-10-22-victimilla-arrasa.html" },
+  { id: "a-lutero", titulo: "¡Martín Lutero reforma la Liga!", fecha: "2026-10-28", dia_number: 9, src: "/napicol/2026-10-28-lutero-reforma.html" },
 ];
 // El último número sin fotos sirve de plantilla de estilo para el prompt
 export const PLANTILLA = "/napicol/2026-10-28-lutero-reforma.html";
