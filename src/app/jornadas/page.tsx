@@ -66,8 +66,9 @@ export default function Jornadas() {
             </button>
 
             <div className="flex flex-wrap gap-2 px-4 pb-3 text-xs">
-              {totals.map(({ p, pts }, i) => (
-                <span key={p.id} className={`rounded-full px-2 py-1 ${i === 0 ? "bg-gold text-felt font-semibold" : "bg-felt text-ink"}`}>
+              {/* En dorado el que más puntuó del día; si empatan, todos los empatados */}
+              {totals.map(({ p, pts }) => (
+                <span key={p.id} className={`rounded-full px-2 py-1 ${pts === totals[0]?.pts ? "bg-gold text-felt font-semibold" : "bg-felt text-ink"}`}>
                   {p.nickname} {pts > 0 ? "+" : ""}{pts}
                 </span>
               ))}
