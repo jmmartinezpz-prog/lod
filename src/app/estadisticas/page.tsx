@@ -351,7 +351,6 @@ export default function Estadisticas() {
               ["Con marcador*", (s) => s.partidasConVidas],
               ["🩸 Perdidas*", (s) => s.lost],
               ["🩸 Perdidas / partida*", (s) => fmt(s.vidasPorPartida)],
-              ["💚 Recuperadas*", (s) => s.gained],
               ["❤️ Vidas al ganar*", (s) => fmt(s.vidasAlGanar)],
               ["💪 Victoria más holgada*", (s) => s.maxVidasGanando ?? "–"],
               ["😅 Por la mínima*", (s) => s.porLaMinima],
