@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase, supabaseConfigured } from "./supabase";
+import { defaultPoints } from "./scoring";
+import type { JornadaKind } from "./types";
 
 // Colores de jugador: validados para daltonismo sobre el fondo de la app.
 // Los 5 primeros van a los fijos por orden de mesa; el resto, a wildcards.
 export const PALETTE = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
 
-export type Partida = { id: string; started_at: string; ended_at: string | null; start_lives: number };
+export type Partida = { id: string; started_at: string; ended_at: string | null; start_lives: number; kind?: JornadaKind };
 
 export type PartidaJugador = {
   id: string;
@@ -36,10 +38,12 @@ export type Game = {
   startedAt: string;
   endedAt: string | null;
   start: number;
+  kind: JornadaKind; // decide la tabla de puntos
   seats: Seat[];
   synced: boolean; // partida y jugadores ya están en Supabase
   pending: Movimiento[]; // movimientos aún sin subir
   zeroGoneBy: string | null; // quién hizo BUST siendo el único en vida cero (desde entonces no hay vida cero)
+  bustOrder: string[]; // ids en el orden en que han reventado
 };
 
 // crypto.randomUUID solo existe en https; en la red local (http) hace falta el plan B.
@@ -52,16 +56,18 @@ export function uuid() {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-export function newGame(start: number, seats: Omit<Seat, "id" | "lives">[]): Game {
+export function newGame(start: number, kind: JornadaKind, seats: Omit<Seat, "id" | "lives">[]): Game {
   return {
     id: uuid(),
     startedAt: new Date().toISOString(),
     endedAt: null,
     start,
+    kind,
     seats: seats.map((s) => ({ ...s, id: uuid(), lives: start })),
     synced: false,
     pending: [],
     zeroGoneBy: null,
+    bustOrder: [],
   };
 }
 
@@ -69,6 +75,7 @@ function move(g: Game, seat: Seat, lives: number, zeroGoneBy: string | null, kin
   return {
     ...g,
     zeroGoneBy,
+    bustOrder: lives < 0 ? [...g.bustOrder, seat.id] : g.bustOrder.filter((id) => id !== seat.id),
     seats: g.seats.map((s) => (s.id === seat.id ? { ...s, lives } : s)),
     pending: [
       ...g.pending,
@@ -101,13 +108,23 @@ export function heal(g: Game, id: string): Game {
   return move(g, seat, restores ? 0 : 1, g.zeroGoneBy === id ? null : g.zeroGoneBy, "vida", null);
 }
 
+export const pointsFor = (kind: JornadaKind, players: number, place: number) =>
+  defaultPoints(players, kind)?.[place - 1] ?? null;
+
+// Clasificación de la partida: vivos por vidas, luego los reventados del último al primero en caer.
+export function finalStandings(g: Game) {
+  const alive = g.seats.filter((s) => s.lives >= 0).sort((a, b) => b.lives - a.lives);
+  const busted = g.bustOrder.toReversed().map((id) => g.seats.find((s) => s.id === id)!).filter(Boolean);
+  return [...alive, ...busted].map((s, i) => ({ ...s, place: i + 1, points: pointsFor(g.kind, g.seats.length, i + 1) }));
+}
+
 // Sube lo que falte. Todo son upserts con ids del móvil, así que repetir es inocuo.
 export async function syncGame(g: Game): Promise<{ header: boolean; sent: string[]; error: string | null }> {
   if (!supabaseConfigured) return { header: false, sent: [], error: "Supabase no configurado" };
   if (!g.synced) {
     const p = await supabase
       .from("partidas")
-      .upsert({ id: g.id, started_at: g.startedAt, ended_at: g.endedAt, start_lives: g.start });
+      .upsert({ id: g.id, started_at: g.startedAt, ended_at: g.endedAt, start_lives: g.start, kind: g.kind });
     if (p.error) return { header: false, sent: [], error: p.error.message };
     const j = await supabase.from("partida_jugadores").upsert(
       g.seats.map((s, i) => ({ id: s.id, partida_id: g.id, player_id: s.playerId, name: s.name, color: s.color, seat: i })),

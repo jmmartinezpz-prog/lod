@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Status } from "@/components/Status";
 import { useLeague } from "@/lib/useLeague";
-import { heal, hit, newGame, PALETTE as COLORS, syncGame, type Game, type Seat } from "@/lib/partidas";
+import { finalStandings, heal, hit, newGame, PALETTE as COLORS, syncGame, type Game, type Seat } from "@/lib/partidas";
+import type { JornadaKind } from "@/lib/types";
 
 const NORMAL = 6;
 const SOBRANTES = 8;
@@ -48,6 +49,7 @@ function FitName({ name, max, className = "" }: { name: string; max: number; cla
 
 export default function Juego() {
   const [game, setGame] = useState<Game | null>(null);
+  const [summary, setSummary] = useState<Game | null>(null);
 
   useEffect(() => {
     try {
@@ -58,6 +60,8 @@ export default function Juego() {
         setGame({
           ...saved,
           zeroGoneBy: saved.zeroGoneBy ?? null,
+          kind: saved.kind ?? "normal",
+          bustOrder: saved.bustOrder ?? [],
           pending: saved.pending.map((m: Game["pending"][number]) => ({ ...m, kind: m.kind ?? "vida", from_jugador_id: m.from_jugador_id ?? null })),
         });
     } catch {}
@@ -74,12 +78,58 @@ export default function Juego() {
     });
   }, []);
 
-  return game ? <Board game={game} update={update} /> : <Setup onStart={(g) => update(() => g)} />;
+  return (
+    <>
+      {game ? <Board game={game} update={update} onFinished={setSummary} /> : <Setup onStart={(g) => update(() => g)} />}
+      {summary && <Summary game={summary} onClose={() => setSummary(null)} />}
+    </>
+  );
+}
+
+// Resumen al cerrar una partida: puestos y puntos de liga según la tabla normal o de sobrantes
+function Summary({ game, onClose }: { game: Game; onClose: () => void }) {
+  const rows = finalStandings(game);
+  const medal = ["🥇", "🥈", "🥉"];
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/75 p-3 backdrop-blur-sm sm:items-center">
+      <div className="max-h-full w-full max-w-md space-y-4 overflow-y-auto rounded-3xl bg-felt p-5 shadow-2xl">
+        <div className="text-center">
+          <p className="text-4xl">🏁</p>
+          <h2 className="text-2xl font-bold">Resumen de la partida</h2>
+          <p className="text-sm text-muted">
+            {game.kind === "sobrante" ? "Sobrantes" : "Normal"} · {game.start} vidas · {game.seats.length} jugadores
+          </p>
+        </div>
+        <ol className="space-y-2">
+          {rows.map((r) => (
+            <li key={r.id} className="flex items-center gap-3 rounded-2xl p-3 text-white" style={{ background: tileBg(r.color) }}>
+              <span className="w-8 text-center text-2xl">{medal[r.place - 1] ?? `${r.place}º`}</span>
+              <span className="flex-1 text-lg font-semibold leading-tight [text-shadow:0_1px_4px_rgba(0,0,0,.4)]">
+                {r.name}
+                <span className="block text-xs font-medium opacity-85">
+                  {r.lives < 0 ? "💀 BUST" : r.lives === 0 ? "vida cero" : `${r.lives} ${r.lives === 1 ? "vida" : "vidas"}`}
+                </span>
+              </span>
+              <span className="text-right [text-shadow:0_1px_4px_rgba(0,0,0,.4)]">
+                <span className="tabular block text-3xl font-bold leading-none">{r.points ?? "–"}</span>
+                <span className="text-xs opacity-85">puntos</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+        {rows[0]?.points === null && (
+          <p className="text-center text-xs text-muted">No hay tabla de puntos para {game.seats.length} jugadores.</p>
+        )}
+        <button onClick={onClose} className="w-full rounded-2xl bg-gold py-3.5 text-lg font-bold text-felt">Cerrar</button>
+      </div>
+    </div>
+  );
 }
 
 function Setup({ onStart }: { onStart: (g: Game) => void }) {
   const { players, loading, error } = useLeague();
   const [start, setStart] = useState(NORMAL);
+  const [kind, setKind] = useState<JornadaKind>("normal");
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [colorOf, setColorOf] = useState<Record<string, string>>({});
   const [wildcards, setWildcards] = useState<{ id: string; name: string }[]>([]);
@@ -119,12 +169,12 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
     onStart(
       newGame(
         start,
+        kind,
         seated.map((c) => ({ playerId: c.id.startsWith("wc-") ? null : c.id, name: c.name, color: color(c.id) })),
       ),
     );
   }
 
-  const mode = start === NORMAL ? "normal" : start === SOBRANTES ? "sobrantes" : "corta";
 
   return (
     <div className="space-y-5">
@@ -133,16 +183,19 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
       <section className="rounded-2xl border border-line bg-card p-4">
         <div className="grid grid-cols-2 gap-2">
           {[
-            { v: NORMAL, label: "Normal", on: mode === "normal" },
-            { v: SOBRANTES, label: "Sobrantes", on: mode === "sobrantes" },
+            { v: NORMAL, k: "normal" as const, label: "Normal", pts: "5-3-2-1-0" },
+            { v: SOBRANTES, k: "sobrante" as const, label: "Sobrantes", pts: "9-6-4-2-0" },
           ].map((o) => (
             <button
               key={o.label}
-              onClick={() => setStart(o.v)}
-              className={`rounded-xl py-3 font-semibold transition ${o.on ? "bg-gold text-felt" : "border border-line text-muted"}`}
+              onClick={() => {
+                setStart(o.v);
+                setKind(o.k);
+              }}
+              className={`rounded-xl py-3 font-semibold transition ${kind === o.k ? "bg-gold text-felt" : "border border-line text-muted"}`}
             >
               {o.label}
-              <span className="block text-xs font-medium opacity-80">{o.v} vidas</span>
+              <span className="block text-xs font-medium opacity-80">{o.v} vidas · {o.pts}</span>
             </button>
           ))}
         </div>
@@ -150,7 +203,9 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
         <div className="mt-5 text-center">
           <span className="tabular text-6xl font-bold text-gold">{start}</span>
           <span className="ml-1 text-2xl">❤️</span>
-          <p className="text-xs text-muted">{mode === "corta" ? "Partida a medida" : "+ la vida cero"}</p>
+          <p className="text-xs text-muted">
+            + la vida cero{start !== (kind === "sobrante" ? SOBRANTES : NORMAL) ? ` · partida corta, puntúa como ${kind === "sobrante" ? "sobrantes" : "normal"}` : ""}
+          </p>
         </div>
         <input
           type="range"
@@ -232,7 +287,7 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   );
 }
 
-function Board({ game, update }: { game: Game; update: Update }) {
+function Board({ game, update, onFinished }: { game: Game; update: Update; onFinished: (g: Game) => void }) {
   const rows = useRows(game.seats.length);
   const [deltas, setDeltas] = useState<Record<string, number>>({});
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -277,11 +332,12 @@ function Board({ game, update }: { game: Game; update: Update }) {
     const res = await syncGame(ended);
     if (res.error && !confirm(`No se ha podido guardar la partida (${res.error}).\n\n¿Salir igual? Se perderá de las estadísticas.`)) return;
     update(next);
+    onFinished(ended);
   }
 
   function rematch() {
     if (!confirm("¿Guardar esta partida y empezar otra con los mismos jugadores?")) return;
-    finish(() => newGame(game.start, game.seats));
+    finish(() => newGame(game.start, game.kind, game.seats));
   }
 
   function exit() {
@@ -377,13 +433,13 @@ function Board({ game, update }: { game: Game; update: Update }) {
       <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center" style={{ paddingTop: "max(8px, env(safe-area-inset-top))" }}>
         <div className="pointer-events-auto flex items-center gap-1 rounded-full bg-black/55 p-1 text-white backdrop-blur">
           <span className="px-2 text-xs text-white/80" title="Vida cero">{game.zeroGoneBy ? "0 🚫" : "0 ✓"}</span>
-          <span
-            title={sync.error ?? undefined}
-            className="px-1 text-xs text-white/70"
-            onClick={() => sync.error && alert(`Sin guardar: ${sync.error}`)}
-          >
-            {sync.pending ? `⏳ ${sync.pending}` : "☁️ ✓"}
-          </span>
+          {sync.error ? (
+            <button onClick={() => alert(`No se está guardando la partida:\n\n${sync.error}`)} className="rounded-full bg-[#d33] px-2.5 py-1 text-xs font-semibold">
+              ⚠️ Sin guardar
+            </button>
+          ) : (
+            <span className="px-1 text-xs text-white/70">{sync.pending ? `⏳ ${sync.pending}` : "☁️ ✓"}</span>
+          )}
           <button onClick={rematch} aria-label="Nueva partida" className="h-9 w-9 rounded-full text-lg">↺</button>
           <button onClick={exit} aria-label="Terminar" className="h-9 w-9 rounded-full text-lg">✕</button>
         </div>

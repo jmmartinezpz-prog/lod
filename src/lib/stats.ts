@@ -1,5 +1,5 @@
 import type { Movimiento, Partida, PartidaJugador } from "./partidas";
-import { PALETTE } from "./partidas";
+import { PALETTE, pointsFor } from "./partidas";
 import type { Jornada, LeagueEvent, Player, Result } from "./types";
 
 // Una partida sin movimientos desde hace tanto se da por terminada
@@ -20,6 +20,7 @@ export type SeatResumen = PartidaJugador & {
   gained: number;
   outAt: number | null;
   place: number;
+  points: number | null; // puntos de liga que le tocarían por el puesto
   moves: Movimiento[];
 };
 
@@ -77,6 +78,7 @@ export function resumir(
           thrown: moves.filter((m) => m.kind === "piscina" && m.from_jugador_id === j.id).length,
           received: mine.filter((m) => m.kind === "piscina").length,
           place: 0,
+          points: null as number | null,
           moves: mine,
         };
       });
@@ -86,7 +88,10 @@ export function resumir(
           ? b.lives - a.lives || a.seat - b.seat
           : a.outAt === null ? -1 : b.outAt === null ? 1 : b.outAt - a.outAt,
       );
-      seats.forEach((s, i) => (s.place = i + 1));
+      seats.forEach((s, i) => {
+        s.place = i + 1;
+        s.points = pointsFor(partida.kind ?? (partida.start_lives === 8 ? "sobrante" : "normal"), seats.length, i + 1);
+      });
 
       return { partida, seats, moves, live, startAt, endAt, winner: !live && seats.length > 1 ? seats[0] : null };
     })
@@ -125,6 +130,7 @@ export type PlayerStats = {
   thrown: number;
   received: number;
   zeroWins: number; // victorias desde la vida cero
+  juegoPts: number;
   // liga
   jornadas: number;
   jornadaWins: number;
@@ -145,9 +151,10 @@ export function playerStats(opts: {
   results: Result[];
   events: LeagueEvent[];
   resumenes: Resumen[]; // ya filtrados por fecha y terminados
+  live?: Resumen[]; // en curso: solo cuentan para las piscinas
   range: Range;
 }): PlayerStats[] {
-  const { players, jornadas, results, events, resumenes, range } = opts;
+  const { players, jornadas, results, events, resumenes, live = [], range } = opts;
   const regulars = players
     .filter((p) => p.active && !p.is_wildcard)
     .sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99) || a.nickname.localeCompare(b.nickname));
@@ -168,7 +175,7 @@ export function playerStats(opts: {
   const extra = (key: string, name: string) => {
     if (!keys.has(key)) keys.set(key, { name, color: "var(--muted)" });
   };
-  for (const r of resumenes) for (const s of r.seats) extra(s.key, byId.get(s.key) ? label(byId.get(s.key)!) : s.name);
+  for (const r of [...resumenes, ...live]) for (const s of r.seats) extra(s.key, byId.get(s.key) ? label(byId.get(s.key)!) : s.name);
   for (const x of [...myResults, ...myEvents]) {
     const p = byId.get(x.player_id);
     if (p) extra(p.id, label(p));
@@ -176,6 +183,7 @@ export function playerStats(opts: {
 
   return [...keys].map(([key, { name, color }]) => {
     const seats = resumenes.flatMap((r) => r.seats.filter((s) => s.key === key).map((s) => ({ s, n: r.seats.length, id: r.partida.id })));
+    const liveSeats = live.flatMap((r) => r.seats.filter((s) => s.key === key).map((s) => ({ s })));
     const res = myResults.filter((r) => r.player_id === key);
     const ev = myEvents.filter((e) => e.player_id === key);
     const sum = (kind: LeagueEvent["kind"]) => ev.filter((e) => e.kind === kind).reduce((t, e) => t + e.value, 0);
@@ -194,8 +202,9 @@ export function playerStats(opts: {
       streak: juego.current,
       bestStreak: juego.best,
       form: seats.slice(-10).map(({ s, n, id }) => ({ place: s.place, of: n, partidaId: id })),
-      thrown: seats.reduce((t, { s }) => t + s.thrown, 0),
-      received: seats.reduce((t, { s }) => t + s.received, 0),
+      thrown: [...seats, ...liveSeats].reduce((t, { s }) => t + s.thrown, 0),
+      received: [...seats, ...liveSeats].reduce((t, { s }) => t + s.received, 0),
+      juegoPts: seats.reduce((t, { s }) => t + (s.points ?? 0), 0),
       zeroWins: seats.filter(({ s }) => s.place === 1 && s.minLives === 0).length,
       jornadas: res.length,
       jornadaWins: res.filter((r) => r.position === 1).length,

@@ -68,6 +68,7 @@ export default function Estadisticas() {
     results: league.results,
     events: league.events,
     resumenes: terminadas,
+    live: enRango.filter((r) => r.live),
     range,
   });
   const recs = records(stats, terminadas);
@@ -207,6 +208,7 @@ export default function Estadisticas() {
 
       {/* Barras */}
       <div className="grid gap-4 sm:grid-cols-2">
+        <Bars title="⭐ Puntos en partidas" stats={stats} pick={(s) => s.juegoPts} />
         <Bars title="🏆 Partidas ganadas" stats={stats} pick={(s) => s.wins} />
         <Bars title="🪦 Primero en caer" stats={stats} pick={(s) => s.firstOut} />
         <Bars title="🏊 Piscinas" stats={stats} pick={(s) => s.piscinas} />
@@ -255,9 +257,10 @@ export default function Estadisticas() {
       {/* Tablas completas */}
       <Card title="⚔️ Modo juego">
         <Table
-          stats={stats.filter((s) => s.partidas > 0).sort((a, b) => b.wins - a.wins || (a.avgPlace ?? 9) - (b.avgPlace ?? 9))}
+          stats={stats.filter((s) => s.partidas > 0).sort((a, b) => b.juegoPts - a.juegoPts || b.wins - a.wins)}
           cols={[
             ["PJ", (s) => s.partidas],
+            ["Pts", (s) => s.juegoPts],
             ["🏆", (s) => s.wins],
             ["% vict.", (s) => `${Math.round((s.wins / s.partidas) * 100)}%`],
             ["Puesto medio", (s) => fmt(s.avgPlace)],
@@ -347,6 +350,7 @@ function Eliminaciones({ r }: { r: Resumen }) {
               ? `💀 BUST min ${Math.floor((s.outAt - r.startAt) / 60_000)}${s.place === n ? " · 1º en caer" : ""}`
               : `${s.lives === 0 ? "vida cero" : `${s.lives} ❤️`}${r.winner?.id === s.id ? " · 🏆" : ""}`}
             {s.thrown + s.received > 0 && <span className="block">🏊 {s.thrown} · 💧 {s.received}</span>}
+            {!r.live && s.points !== null && <span className="block font-semibold text-gold">{s.points} pts</span>}
           </span>
         </li>
       ))}
