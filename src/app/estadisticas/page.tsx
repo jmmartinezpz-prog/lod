@@ -228,6 +228,12 @@ export default function Estadisticas() {
               ["🔻 Último de la jornada", (s) => s.ultimos],
               ["Puesto medio", (s) => fmt(s.avgPos)],
               ["🔥 Racha", (s) => s.jornadaStreak],
+            ["Normales", (s) => s.porTipo.normal.jugadas],
+            ["🏆 Norm.", (s) => s.porTipo.normal.ganadas],
+            ["Medio norm.", (s) => fmt(s.porTipo.normal.medio)],
+            ["♻️ Sobrantes", (s) => s.porTipo.sobrante.jugadas],
+            ["🏆 Sobr.", (s) => s.porTipo.sobrante.ganadas],
+            ["Medio sobr.", (s) => fmt(s.porTipo.sobrante.medio)],
               ["Mejor racha", (s) => s.bestJornadaStreak],
             ]}
           />
@@ -645,6 +651,19 @@ function Individual({ history, stats, standings, focus, onFocus, sanciones, fina
         ["Mejor racha", st?.bestJornadaStreak ?? 0],
       ],
     },
+    ...(["normal", "sobrante"] as const).map((k) => {
+      const t = st?.porTipo[k];
+      return {
+        title: k === "normal" ? "🎲 Jornadas normales" : "♻️ Jornadas de sobrantes",
+        items: [
+          ["Jugadas", t?.jugadas ?? 0],
+          ["Ganadas", t ? `${t.ganadas}${t.jugadas ? ` (${Math.round((t.ganadas / t.jugadas) * 100)}%)` : ""}` : 0],
+          ["Podios", t?.podios ?? 0],
+          ["Puesto medio", fmt(t?.medio ?? null)],
+          ["Puntos", t?.puntos ?? 0],
+        ] as [string, string | number][],
+      };
+    }),
     {
       title: "🥇 Puestos en jornadas",
       items: [

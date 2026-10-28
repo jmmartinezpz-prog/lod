@@ -1,6 +1,6 @@
 import type { Movimiento, Partida, PartidaJugador } from "./partidas";
 import { coloresDeLiga, pointsFor } from "./partidas";
-import type { Jornada, LeagueEvent, Player, Result } from "./types";
+import type { Jornada, JornadaKind, LeagueEvent, Player, Result } from "./types";
 import { playerLabel, type LeagueHistory, type Leadership } from "./history";
 
 // Una partida sin movimientos desde hace tanto se da por terminada
@@ -151,6 +151,7 @@ export type PlayerStats = {
   thrown: number;
   received: number;
   partidasConVidas: number; // partidas con marcador (desde VIDAS_DESDE)
+  porTipo: { [K in JornadaKind]: PorTipo }; // jornadas normales y de sobrantes, por separado
   zeroWins: number; // victorias desde la vida cero
   vidasAlGanar: number | null; // media de vidas con las que gana: alto = gana sobrado
   maxVidasGanando: number | null; // su victoria más holgada
@@ -178,6 +179,8 @@ export type PlayerStats = {
   pisRecibidas: number;
   pisBalance: number; // dadas - recibidas
 };
+
+export type PorTipo = { jugadas: number; ganadas: number; podios: number; medio: number | null; puntos: number };
 
 export function playerStats(opts: {
   players: Player[];
@@ -229,6 +232,16 @@ export function playerStats(opts: {
     const seats = conVidas.flatMap((r) => r.seats.filter((s) => s.key === key));
     const ganadas = seats.filter((s) => s.place === 1).map((s) => Math.max(0, s.lives));
     const liga = streaks(res.map((r) => r.position === 1));
+    const delTipo = (k: JornadaKind): PorTipo => {
+      const xs = res.filter((r) => (jornadaById.get(r.jornada_id)?.kind ?? "normal") === k);
+      return {
+        jugadas: xs.length,
+        ganadas: xs.filter((r) => r.position === 1).length,
+        podios: xs.filter((r) => r.position <= 3).length,
+        medio: xs.length ? xs.reduce((t, r) => t + r.position, 0) / xs.length : null,
+        puntos: xs.reduce((t, r) => t + r.points, 0),
+      };
+    };
     const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
     return {
@@ -246,6 +259,7 @@ export function playerStats(opts: {
       received: recibidas,
       juegoPts: res.reduce((t, r) => t + r.points, 0),
       partidasConVidas: seats.length,
+      porTipo: { normal: delTipo("normal"), sobrante: delTipo("sobrante") },
       zeroWins: seats.filter((s) => s.place === 1 && s.minLives === 0).length,
       vidasAlGanar: avg(ganadas),
       maxVidasGanando: ganadas.length ? Math.max(...ganadas) : null,

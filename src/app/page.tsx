@@ -55,10 +55,11 @@ export default function Clasificacion() {
       {!loading && !error && (
         <>
           {/* Cabecera de columnas solo en ordenador */}
-          <div className="hidden grid-cols-[3rem_minmax(0,1fr)_repeat(6,5.5rem)_6rem] items-center gap-3 px-4 text-xs text-muted lg:grid">
+          <div className="hidden grid-cols-[3rem_minmax(0,1fr)_repeat(7,5.5rem)_6rem] items-center gap-3 px-4 text-xs text-muted lg:grid">
             <span>#</span>
             <span>Jugador</span>
             <span className="text-right">🏆 Victorias</span>
+            <span className="text-right">♻️ Sobrantes</span>
             <span className="text-right">🥉 Podios</span>
             <span className="text-right">🏊 Entregadas</span>
             <span className="text-right">💧 Recibidas</span>
@@ -79,7 +80,7 @@ export default function Clasificacion() {
                 <li
                   key={s.player.id}
                   ref={mov.ref(s.player.id)}
-                  className={`rounded-2xl border p-3 lg:grid lg:grid-cols-[3rem_minmax(0,1fr)_repeat(6,5.5rem)_6rem] lg:items-center lg:gap-3 lg:px-4 ${
+                  className={`rounded-2xl border p-3 lg:grid lg:grid-cols-[3rem_minmax(0,1fr)_repeat(7,5.5rem)_6rem] lg:items-center lg:gap-3 lg:px-4 ${
                     i === 0 ? "border-gold/60 bg-gold/10" : "border-line bg-card"
                   }`}
                 >
@@ -111,6 +112,7 @@ export default function Clasificacion() {
                       {/* Estadísticas en móvil */}
                       <p className="mt-2 flex flex-wrap gap-1.5 text-xs lg:hidden">
                         <Chip>🏆 {s.wins}</Chip>
+                        <Chip>♻️ {s.sobrantes}</Chip>
                         <Chip>🥉 {s.podios}</Chip>
                         <Chip>🏊 {s.piscinas}</Chip>
                         <Chip>💧 {s.recibidas}</Chip>
@@ -122,7 +124,7 @@ export default function Clasificacion() {
                     <Puntos pts={pts} cambio={cambio} className="flex lg:hidden" />
                   </div>
 
-                  {[s.wins, s.podios, s.piscinas, s.recibidas].map((v, k) => (
+                  {[s.wins, s.sobrantes, s.podios, s.piscinas, s.recibidas].map((v, k) => (
                     <span key={k} className="tabular hidden text-right text-lg lg:block">{v}</span>
                   ))}
                   <span className="tabular hidden text-right text-lg font-semibold lg:block"><Balance n={s.balance} /></span>
@@ -134,7 +136,7 @@ export default function Clasificacion() {
           </ol>
 
           <p className="text-center text-xs text-muted lg:hidden">
-            🏆 victorias · 🥉 podios · 🏊 piscinas entregadas · 💧 recibidas · ± balance (entregadas − recibidas) · 🎲 jornadas jugadas
+            🏆 victorias · ♻️ sobrantes ganadas · 🥉 podios · 🏊 piscinas entregadas · 💧 recibidas · ± balance (entregadas − recibidas) · 🎲 jornadas jugadas
           </p>
         </>
       )}

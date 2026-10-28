@@ -10,6 +10,7 @@ export type Standing = {
   points: number;
   played: number;
   wins: number;
+  sobrantes: number; // jornadas de sobrantes ganadas
   piscinas: number; // entregadas
   recibidas: number;
   balance: number; // entregadas - recibidas
@@ -69,6 +70,7 @@ export function useLeague() {
   }, [load]);
 
   const base = useMemo<Standing[]>(() => {
+    const sobrante = new Set(jornadas.filter((j) => j.kind === "sobrante").map((j) => j.id));
     const rows = players
       .filter((p) => !p.is_wildcard)
       .map((player) => {
@@ -83,6 +85,7 @@ export function useLeague() {
           points: mine.reduce((s, r) => s + r.points, 0) + adjPts,
           played: mine.length,
           wins: mine.filter((r) => r.position === 1).length,
+          sobrantes: mine.filter((r) => r.position === 1 && sobrante.has(r.jornada_id)).length,
           piscinas: sum("piscina"),
           recibidas: events
             .filter((e) => e.kind === "piscina" && e.target_player_id === player.id)
@@ -99,7 +102,7 @@ export function useLeague() {
         };
       });
     return rows.sort((a, b) => b.points - a.points || b.wins - a.wins);
-  }, [players, results, adjustments, events]);
+  }, [players, results, adjustments, events, jornadas]);
 
   // 👑 al líder y 🕳️ al que está en el pozo (último), según la clasificación de ahora mismo:
   // se mueven solos en cuanto cambia la liga. La 👑 fija de la base de datos se ignora.
