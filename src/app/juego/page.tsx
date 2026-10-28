@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Status } from "@/components/Status";
 import { useLeague } from "@/lib/useLeague";
-import { cancelGame, cerrarPartida, finalStandings, GAME_COLORS, heal, hit, newGame, syncGame, type Game, type Seat } from "@/lib/partidas";
+import { cancelGame, cerrarPartida, coloresDeLiga, finalStandings, GAME_COLORS, heal, hit, newGame, syncGame, type Game, type Seat } from "@/lib/partidas";
 import type { JornadaKind } from "@/lib/types";
 import { playerLabel } from "@/lib/history";
 import { esCampeon, Starred } from "@/components/Status";
@@ -306,7 +306,7 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   // Los colores no dependen de dónde se siente cada uno: orden fijo de la liga, y los elegidos se recuerdan
   const elegidos = {
     ...colorOf,
-    ...Object.fromEntries(players.flatMap((p) => (p.color ? [[p.id, p.color]] : []))),
+    ...Object.fromEntries(coloresDeLiga(players)), // los mismos que ven las estadísticas
     ...picks,
   };
   const assigned = assignColors(

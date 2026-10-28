@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { escucharCambios, supabase, supabaseConfigured } from "./supabase";
 import { defaultPoints } from "./scoring";
-import type { JornadaKind } from "./types";
+import type { JornadaKind, Player } from "./types";
 
 // Colores de jugador: validados para daltonismo sobre el fondo de la app.
 // Los 5 primeros van a los fijos por orden de mesa; el resto, a wildcards.
@@ -30,6 +30,28 @@ export const GAME_COLORS: { hex: string; name: string }[] = [
   { hex: "#ef7fa6", name: "Chicle" },
   { hex: "#2b2b2b", name: "Negro" },
 ];
+
+// El color de cada jugador fijo, el mismo en el modo juego y en todas las estadísticas:
+// el que tiene elegido (17_colores.sql) y, si no tiene, el primero libre en el orden de la mesa.
+export function coloresDeLiga(players: Player[]): Map<string, string> {
+  const fijos = players
+    .filter((p) => !p.is_wildcard)
+    .sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99) || a.nickname.localeCompare(b.nickname));
+  const out = new Map<string, string>();
+  const usados = new Set<string>();
+  for (const p of fijos)
+    if (p.color && !usados.has(p.color)) {
+      out.set(p.id, p.color);
+      usados.add(p.color);
+    }
+  for (const p of fijos) {
+    if (out.has(p.id)) continue;
+    const libre = GAME_COLORS.find((c) => !usados.has(c.hex))?.hex ?? PALETTE[0];
+    out.set(p.id, libre);
+    usados.add(libre);
+  }
+  return out;
+}
 
 export type Partida = { id: string; started_at: string; ended_at: string | null; start_lives: number; kind?: JornadaKind; cancelada?: boolean; en_liga?: boolean };
 

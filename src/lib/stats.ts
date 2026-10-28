@@ -1,5 +1,5 @@
 import type { Movimiento, Partida, PartidaJugador } from "./partidas";
-import { PALETTE, pointsFor } from "./partidas";
+import { coloresDeLiga, pointsFor } from "./partidas";
 import type { Jornada, LeagueEvent, Player, Result } from "./types";
 import { playerLabel, type LeagueHistory, type Leadership } from "./history";
 
@@ -206,7 +206,8 @@ export function playerStats(opts: {
   );
 
   const keys = new Map<string, { name: string; color: string }>();
-  regulars.forEach((p, i) => keys.set(p.id, { name: label(p), color: PALETTE[i % PALETTE.length] }));
+  const colores = coloresDeLiga(players);
+  regulars.forEach((p) => keys.set(p.id, { name: label(p), color: colores.get(p.id)! }));
   const group = (id: string | null) => (id && keys.has(id) ? id : WILDCARD);
   const anyWild =
     [...resumenes, ...live].some((r) => r.seats.some((s) => s.key === WILDCARD)) ||

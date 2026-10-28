@@ -1,4 +1,4 @@
-import { PALETTE } from "./partidas";
+import { coloresDeLiga } from "./partidas";
 import type { Adjustment, Dia, Jornada, Player, Result } from "./types";
 
 // Foto de la clasificación justo después de cada jornada (índice 0 = antes de empezar)
@@ -133,9 +133,10 @@ export function leagueHistory(
   }
 
   const tramo = snapshots.slice(1);
+  const colores = coloresDeLiga(players);
   return {
-    series: regulars.map((p, i) => ({
-      key: p.id, name: playerLabel(p), color: PALETTE[i % PALETTE.length], campeon: Boolean(p.campeon), mundiales: p.mundiales ?? 0,
+    series: regulars.map((p) => ({
+      key: p.id, name: playerLabel(p), color: colores.get(p.id)!, campeon: Boolean(p.campeon), mundiales: p.mundiales ?? 0,
     })),
     snapshots,
     leadership: leadershipOf(keys, tramo),
