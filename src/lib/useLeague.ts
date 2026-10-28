@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { escucharCambios, supabase, supabaseConfigured } from "./supabase";
+import { marcarCampeones } from "@/components/Status";
 import type { Adjustment, Dia, Jornada, League, LeagueEvent, Player, Result } from "./types";
 
 export type Standing = {
@@ -48,6 +49,7 @@ export function useLeague() {
     const firstError = [p, j, r, a, e, l].find((x) => x.error)?.error;
     if (firstError) setError(firstError.message);
     else setError(null);
+    marcarCampeones((p.data ?? []).filter((x: Player) => x.campeon).map((x: Player) => x.nickname));
     setPlayers(p.data ?? []);
     setJornadas(j.data ?? []);
     setResults(r.data ?? []);
@@ -66,7 +68,7 @@ export function useLeague() {
     return escucharCambios("lod-live", ["players", "dias", "jornadas", "results", "adjustments", "events", "league"], load);
   }, [load]);
 
-  const standings = useMemo<Standing[]>(() => {
+  const base = useMemo<Standing[]>(() => {
     const rows = players
       .filter((p) => !p.is_wildcard)
       .map((player) => {
@@ -99,12 +101,26 @@ export function useLeague() {
     return rows.sort((a, b) => b.points - a.points || b.wins - a.wins);
   }, [players, results, adjustments, events]);
 
+  // 👑 al líder y 🕳️ al que está en el pozo (último), según la clasificación de ahora mismo:
+  // se mueven solos en cuanto cambia la liga. La 👑 fija de la base de datos se ignora.
+  const { marcados, standings } = useMemo(() => {
+    const lider = base[0]?.player.id;
+    const pozo = base.length > 1 ? base.at(-1)!.player.id : null;
+    const marcados = players.map((p) => {
+      const fijo = (p.emoji ?? "").replace(/👑/gu, "").trim();
+      const marca = p.id === lider ? "👑" : p.id === pozo ? "🕳️" : "";
+      return { ...p, emoji: [marca, fijo].filter(Boolean).join(" ") || null };
+    });
+    const byId = new Map(marcados.map((p) => [p.id, p]));
+    return { marcados, standings: base.map((s) => ({ ...s, player: byId.get(s.player.id)! })) };
+  }, [players, base]);
+
   const playedTotal = (league?.jornadas_previas ?? 0) + jornadas.length;
   const nextNumber =
     Math.max(league?.jornadas_previas ?? 0, ...jornadas.map((j) => j.number)) + 1;
 
   return {
-    players, dias, jornadas, results, adjustments, events, league,
+    players: marcados, dias, jornadas, results, adjustments, events, league,
     standings, playedTotal, nextNumber, loading, error, reload: load,
   };
 }

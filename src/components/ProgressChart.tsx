@@ -125,7 +125,7 @@ export function ProgressChart({ history, focus, onFocus }: {
                 {labels.map(({ s, y: ly }) => (
                   <g key={s.key} opacity={focus && focus !== s.key ? 0.3 : 1}>
                     <circle cx={x(last)} cy={y(value(last, s.key))} r={4} fill={s.color} stroke="var(--card)" strokeWidth={2} />
-                    <text x={x(last) + 8} y={ly} dy="0.32em" fontSize={11} fill="var(--ink)">
+                    <text x={x(last) + 8} y={ly} dy="0.32em" fontSize={11} fill={s.campeon ? "var(--gold)" : "var(--ink)"}>
                       {short(s.name.replace(/^\p{Extended_Pictographic}\s*/u, ""))}{" "}
                       <tspan fill="var(--muted)" className="tabular">{value(last, s.key)}</tspan>
                     </text>

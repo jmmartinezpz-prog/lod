@@ -18,7 +18,7 @@ export function PlayerName({ nickname, emoji, mundiales = 0, campeon = false }: 
   return (
     <span>
       {emoji ? `${emoji} ` : ""}
-      {nickname}
+      <span className={campeon ? "font-semibold text-gold" : undefined}>{nickname}</span>
       {mundiales > 0 && <Stars n={mundiales} campeon={campeon} />}
     </span>
   );
@@ -34,14 +34,21 @@ export function Stars({ n, campeon = false }: { n: number; campeon?: boolean }) 
   );
 }
 
+// El campeón vigente va en dorado. Se rellena al cargar la liga, para los nombres que llegan como texto.
+let campeones: string[] = [];
+export function marcarCampeones(nicknames: string[]) {
+  campeones = nicknames;
+}
+
 // Para nombres que ya vienen en texto ("Adolf Victimilla ★★"): pinta las estrellas pequeñas
 export function Starred({ name }: { name: string }) {
   const m = name.match(/^(.*?)\s*(★+)$/);
-  if (!m) return <>{name}</>;
+  const texto = m ? m[1] : name;
+  const oro = campeones.some((c) => texto.includes(c));
   return (
     <>
-      {m[1]}
-      <Stars n={m[2].length} />
+      {oro ? <span className="font-semibold text-gold">{texto}</span> : texto}
+      {m && <Stars n={m[2].length} />}
     </>
   );
 }
