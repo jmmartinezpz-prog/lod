@@ -190,10 +190,10 @@ join jornadas j on j.number = v.n join players p on p.nickname = v.c join player
 -- 7) Sanciones, multas y altas: (jornada, jugador, tipo, puntos, motivo)
 insert into adjustments (jornada_id, player_id, kind, points, reason)
 select j.id, p.id, k, pts, r from (values
-  (3,'Anitín Poceiro','sancion',-1,'Multa'),
-  (3,'Il Cazatore','sancion',-1,'Multa'),
+  (3,'Anitín Poceiro','sancion',-1,'Llegar tarde'),
+  (3,'Il Cazatore','sancion',-1,'Llegar tarde'),
   (13,'El Judío Supremo','alta',15,'Alta en la liga con 15 puntos'),
-  (22,'Super Sapiens','sancion',-4,'Primera sanción de la liga'),
+  (22,'Super Sapiens','sancion',-4,'No acudir el día de su cumpleaños'),
   (32,'Il Cazatore','sancion',-1,'Llegar tarde'),
   (32,'Adolf Victimilla','sancion',-1,'Llegar tarde'),
   (36,'Il Cazatore','sancion',-1,'Llegar tarde')

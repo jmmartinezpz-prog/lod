@@ -79,7 +79,14 @@ export default function Estadisticas() {
     range,
   });
   const periodo = historyIn(history, (d) => inRange(d, range));
-  const recs = [...leagueRecords(periodo), ...records(stats, terminadas)];
+  // Sanciones del periodo (con su jornada), para la ficha y los récords
+  const jornadaById = new Map(league.jornadas.map((j) => [j.id, j]));
+  const sanciones = league.adjustments
+    .filter((a) => a.kind === "sancion")
+    .map((a) => ({ ...a, jornada: a.jornada_id ? jornadaById.get(a.jornada_id) : undefined }))
+    .filter((a) => inRange(a.jornada ? a.jornada.played_on : dayOf(a.created_at), range))
+    .sort((a, b) => (a.jornada?.number ?? 0) - (b.jornada?.number ?? 0));
+  const recs = [...leagueRecords(periodo), ...sancionRecords(sanciones, periodo.series), ...records(stats, terminadas)];
   const filtrando = Boolean(range.from || range.to);
   const sinFecha = league.jornadas.filter((j) => !j.played_on).length;
   const pairs = allSplashes(enRango, league.events, stats, range, league.jornadas);
@@ -152,6 +159,7 @@ export default function Estadisticas() {
         standings={league.standings.map((s) => ({ key: s.player.id, points: s.points }))}
         focus={focus ?? league.standings[0]?.player.id ?? null}
         onFocus={setFocus}
+        sanciones={sanciones}
       />
 
       {/* Récords */}
@@ -349,6 +357,15 @@ export default function Estadisticas() {
         />
         <p className="mt-3 text-xs text-muted">Piscinas de las jornadas de liga + las del modo juego. Balance = entregadas − recibidas.</p>
       </Card>
+
+      <Penalizaciones
+        adjustments={league.adjustments}
+        jornadas={league.jornadas}
+        dias={league.dias}
+        players={league.players}
+        stats={stats}
+        range={range}
+      />
     </div>
   );
 }
@@ -497,12 +514,35 @@ function Balance({ stats }: { stats: PlayerStats[] }) {
 }
 
 // Ficha de cada jugador: liderato (histórico completo) + sus números en las fechas elegidas
-function Individual({ history, stats, standings, focus, onFocus }: {
+type Sancion = { player_id: string; points: number; reason: string | null; jornada?: { number: number } };
+
+// Más sancionado y más llegadas tarde (empates: salen todos)
+function sancionRecords(sanciones: Sancion[], series: { key: string; name: string }[]) {
+  const name = new Map(series.map((s) => [s.key, s.name]));
+  const out: { icon: string; title: string; who: string; value: string }[] = [];
+  const top = (rows: Sancion[], icon: string, title: string, unit: (n: number, pts: number) => string) => {
+    const by = new Map<string, { n: number; pts: number }>();
+    for (const r of rows) {
+      const cur = by.get(r.player_id) ?? { n: 0, pts: 0 };
+      by.set(r.player_id, { n: cur.n + 1, pts: cur.pts + r.points });
+    }
+    const max = Math.max(0, ...[...by.values()].map((v) => v.n));
+    if (!max) return;
+    const who = [...by].filter(([, v]) => v.n === max);
+    out.push({ icon, title, who: who.map(([k]) => name.get(k) ?? "🃏 Wildcard").join(" y "), value: unit(max, who[0][1].pts) });
+  };
+  top(sanciones, "⚖️", "Más sancionado", (n, pts) => `${n} ${n === 1 ? "sanción" : "sanciones"} · ${pts} pts`);
+  top(sanciones.filter((s) => /tarde/i.test(s.reason ?? "")), "⏰", "Más llegadas tarde", (n) => `${n} ${n === 1 ? "vez" : "veces"}`);
+  return out;
+}
+
+function Individual({ history, stats, standings, focus, onFocus, sanciones }: {
   history: ReturnType<typeof leagueHistory>;
   stats: PlayerStats[];
   standings: { key: string; points: number }[];
   focus: string | null;
   onFocus: (key: string) => void;
+  sanciones: Sancion[];
 }) {
   const who = history.series.find((s) => s.key === focus) ?? history.series[0];
   if (!who) return null;
@@ -551,6 +591,17 @@ function Individual({ history, stats, standings, focus, onFocus }: {
       ],
     },
     {
+      title: "⚖️ Sanciones",
+      items: (() => {
+        const mine = sanciones.filter((x) => x.player_id === who.key);
+        if (!mine.length) return [["Sin sanciones", "😇"]] as [string, string | number][];
+        return [
+          ["Total", `${mine.length} · ${mine.reduce((t, x) => t + x.points, 0)} pts`],
+          ...mine.map((x): [string, string | number] => [`${x.jornada ? `J${x.jornada.number} · ` : ""}${x.reason ?? "Sin motivo"}`, x.points]),
+        ];
+      })(),
+    },
+    {
       title: "⚔️ Modo juego",
       items: [
         ["Partidas", st?.partidas ?? 0],
@@ -593,7 +644,7 @@ function Individual({ history, stats, standings, focus, onFocus }: {
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {groups.map((g) => (
           <div key={g.title} className="rounded-xl bg-felt p-3">
             <p className="mb-2 text-sm font-semibold">{g.title}</p>
@@ -609,6 +660,120 @@ function Individual({ history, stats, standings, focus, onFocus }: {
         ))}
       </div>
       <p className="mt-3 text-xs text-muted">Todo sigue el filtro de fechas. El liderato se mide con la clasificación acumulada de toda la liga en cada jornada del periodo.</p>
+    </Card>
+  );
+}
+
+// Penalizaciones: sanciones y multas de puntos de liga
+function Penalizaciones({ adjustments, jornadas, dias, players, stats, range }: {
+  adjustments: ReturnType<typeof useLeague>["adjustments"];
+  jornadas: ReturnType<typeof useLeague>["jornadas"];
+  dias: ReturnType<typeof useLeague>["dias"];
+  players: ReturnType<typeof useLeague>["players"];
+  stats: PlayerStats[];
+  range: Range;
+}) {
+  const jById = new Map(jornadas.map((j) => [j.id, j]));
+  const dById = new Map(dias.map((d) => [d.id, d]));
+  const pById = new Map(players.map((p) => [p.id, p]));
+  const sById = new Map(stats.map((s) => [s.key, s]));
+
+  const list = adjustments
+    .filter((a) => a.kind === "sancion")
+    .map((a) => {
+      const j = a.jornada_id ? jById.get(a.jornada_id) : undefined;
+      const d = j?.dia_id ? dById.get(j.dia_id) : undefined;
+      const day = j?.played_on || d?.played_on || dayOf(a.created_at);
+      return { a, j, d, day };
+    })
+    .filter((x) => inRange(x.day, range))
+    .sort((x, y) => (x.j?.number ?? 9999) - (y.j?.number ?? 9999) || x.a.created_at.localeCompare(y.a.created_at));
+
+  const per = new Map<string, { n: number; pts: number }>();
+  for (const { a } of list) {
+    const cur = per.get(a.player_id) ?? { n: 0, pts: 0 };
+    per.set(a.player_id, { n: cur.n + 1, pts: cur.pts + a.points });
+  }
+  const resumen = [...per].sort((x, y) => x[1].pts - y[1].pts || y[1].n - x[1].n);
+  const totalPts = list.reduce((t, { a }) => t + a.points, 0);
+  const label = (id: string) => {
+    const s = sById.get(id);
+    if (s) return <Name s={s} />;
+    const p = pById.get(id);
+    return <span>{p ? `${p.emoji ? `${p.emoji} ` : ""}${p.nickname}` : "?"}</span>;
+  };
+
+  return (
+    <Card title="⚖️ Penalizaciones">
+      {list.length === 0 ? (
+        <p className="text-sm text-muted">Sin penalizaciones en estas fechas.</p>
+      ) : (
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-felt p-3">
+              <p className="text-xs text-muted">Penalizaciones</p>
+              <p className="tabular text-2xl font-bold">{list.length}</p>
+            </div>
+            <div className="rounded-xl bg-felt p-3">
+              <p className="text-xs text-muted">Puntos de penalización</p>
+              <p className="tabular text-2xl font-bold text-red">{totalPts}</p>
+            </div>
+          </div>
+
+          <div className="-mx-4 overflow-x-auto px-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted">
+                  <th className="py-1.5 pr-3 font-normal">Jugador</th>
+                  <th className="px-2 py-1.5 text-right font-normal">Nº penalizaciones</th>
+                  <th className="px-2 py-1.5 text-right font-normal">Puntos de penalización</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumen.map(([id, r]) => (
+                  <tr key={id} className="border-t border-line">
+                    <td className="min-w-32 py-2 pr-3">{label(id)}</td>
+                    <td className="tabular px-2 py-2 text-right font-semibold">{r.n}</td>
+                    <td className="tabular px-2 py-2 text-right font-semibold text-red">{r.pts}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs uppercase tracking-wider text-muted">Historial</p>
+            <div className="-mx-4 overflow-x-auto px-4">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-muted">
+                    <th className="py-1.5 pr-3 font-normal">Cuándo</th>
+                    <th className="px-2 py-1.5 font-normal">Jugador</th>
+                    <th className="px-2 py-1.5 text-right font-normal">Puntos</th>
+                    <th className="px-2 py-1.5 font-normal">Motivo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map(({ a, j, d, day }) => (
+                    <tr key={a.id} className="border-t border-line align-top">
+                      <td className="whitespace-nowrap py-2 pr-3">
+                        <span className="font-semibold">{j ? `J${j.number}` : "—"}</span>
+                        <span className="block text-xs text-muted">
+                          {d ? `Día ${d.number} · ` : ""}
+                          {new Date(day).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2">{label(a.player_id)}</td>
+                      <td className="tabular px-2 py-2 text-right font-bold text-red">{a.points}</td>
+                      <td className="px-2 py-2 text-muted">{a.reason ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
