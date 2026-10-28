@@ -11,6 +11,7 @@ const tabs = [
   { href: "/jornadas", label: "Jornadas", icon: "🎲" },
   { href: "/juego", label: "Juego", icon: "⚔️" },
   { href: "/estadisticas", label: "Stats", icon: "📊" },
+  { href: "/prensa", label: "Prensa", icon: "📰" },
 ];
 const adminLinks = [
   { href: "/registrar", label: "+ Jornada" },
@@ -62,7 +63,7 @@ export default function Nav() {
         className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-felt/95 backdrop-blur"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="mx-auto grid max-w-xl grid-cols-4">
+        <div className="mx-auto grid max-w-xl grid-cols-5">
           {tabs.map((t) => {
             const on = path === t.href;
             return (

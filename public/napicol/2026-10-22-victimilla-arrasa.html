@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>El Napicol · ¡Victimilla arrasa!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#e7e0d0;color:#141414;font-family:"Source Serif 4",Georgia,serif}
+#wrap{width:1080px;margin:0 auto;transform-origin:top left}
+.page{width:1080px;box-sizing:border-box;background:#f5f0e4;padding:36px 48px 40px;display:flex;flex-direction:column;gap:24px}
+.topbar{display:flex;justify-content:space-between;font-size:15px;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #141414;padding-bottom:10px}
+.mast{display:flex;flex-direction:column;align-items:center;gap:6px}
+.mast-row{display:flex;align-items:center;gap:24px}
+.mast h1{margin:0;font-family:"Playfair Display",Georgia,serif;font-weight:900;font-size:124px;line-height:1;letter-spacing:-.02em}
+.tagline{font-family:"Playfair Display",Georgia,serif;font-style:italic;font-size:22px}
+.strip{display:flex;border-top:4px solid #141414;border-bottom:4px solid #141414}
+.tag{font-family:Anton,Impact,sans-serif;font-size:30px;letter-spacing:.06em;padding:10px 22px}
+.red{background:#c8102e;color:#fff}.yellow{background:#ffd23f}
+.strip-r{flex:1;display:flex;align-items:center;justify-content:flex-end;padding:0 18px;font-size:17px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.kicker{font-family:Anton,Impact,sans-serif;font-size:30px;letter-spacing:.04em;color:#c8102e}
+.head{display:flex;flex-direction:column;gap:14px}
+.head h2{margin:0;font-family:Anton,Impact,sans-serif;font-weight:400;font-size:98px;line-height:.98;text-transform:uppercase}
+.red-t{color:#c8102e}
+.sub{margin:0;font-size:27px;line-height:1.35;font-weight:600}
+.hero{display:flex;gap:28px}
+.photo{margin:0;width:580px;display:flex;flex-direction:column;gap:10px;flex-shrink:0}
+.ph{position:relative;width:580px;height:800px}
+.ph img{width:100%;height:100%;object-fit:cover;object-position:center 30%;display:block;border:3px solid #141414;box-sizing:border-box}
+.stamp{position:absolute;font-family:Anton,Impact,sans-serif;padding:8px 18px;letter-spacing:.04em}
+.s1{top:22px;left:-12px;background:#c8102e;color:#fff;font-size:30px;transform:rotate(-4deg)}
+.s2{bottom:24px;right:18px;background:#ffd23f;font-size:24px;transform:rotate(3deg)}
+figcaption{font-size:16px;font-style:italic;line-height:1.4}
+.side{flex:1;display:flex;flex-direction:column;gap:18px}
+.box{padding:18px 22px;display:flex;flex-direction:column;gap:10px;box-sizing:border-box}
+.white{background:#fff;border:3px solid #141414}
+.dark{background:#141414;color:#f5f0e4}
+.red-b{background:#c8102e;color:#fff;align-items:center;text-align:center;font-size:18px;line-height:1.35}
+.yellow-b{background:#ffd23f;border:3px solid #141414}
+.box-t{font-family:Anton,Impact,sans-serif;font-size:26px;letter-spacing:.04em}
+.line{border-bottom:3px solid #c8102e;padding-bottom:6px}
+.yel{color:#ffd23f}
+.notes .n{display:flex;justify-content:space-between;align-items:baseline;font-size:18px;margin-top:6px}
+.notes .n span{font-family:Anton,Impact,sans-serif;font-size:30px}
+.notes p{margin:0 0 4px;font-size:15px;line-height:1.35;font-style:italic;border-bottom:1px solid #d8d0bf;padding-bottom:6px}
+.big-lbl{font-family:Anton,Impact,sans-serif;font-size:24px;letter-spacing:.05em}
+.big-n{font-family:Anton,Impact,sans-serif;font-size:120px;line-height:1}
+.lead{display:flex;gap:14px;align-items:center;font-size:17px;line-height:1.35}
+.pos{font-family:Anton,Impact,sans-serif;font-size:56px;color:#ffd23f}
+.small{font-size:14px;font-style:italic}
+.cols{display:flex;gap:34px;border-top:2px solid #141414;padding-top:22px}
+.col{flex:1;display:flex;flex-direction:column;gap:14px;font-size:19px;line-height:1.5;text-align:justify}
+.col p{margin:0}
+.lead-in{font-family:Anton,Impact,sans-serif;font-weight:400;font-size:24px;letter-spacing:.03em}
+.h3{font-family:Anton,Impact,sans-serif;font-size:24px;letter-spacing:.03em;margin-top:4px}
+blockquote{margin:0;font-family:"Playfair Display",Georgia,serif;font-style:italic;font-weight:700;font-size:25px;line-height:1.3;text-align:left;border-top:3px solid #c8102e;border-bottom:3px solid #c8102e;padding:12px 0}
+.trio{display:flex;gap:18px}.trio .box{flex:1}.trio p{margin:0;font-size:18px;line-height:1.4}
+.meter{height:22px;border:2px solid #141414;background:#f5f0e4}.fill{height:100%;width:100%;background:repeating-linear-gradient(45deg,#c8102e 0 10px,#8e0b20 10px 20px)}
+.final{background:#141414;color:#f5f0e4;padding:34px 40px;text-align:center;display:flex;flex-direction:column;gap:14px}
+.f1{font-size:19px;letter-spacing:.06em;text-transform:uppercase;line-height:1.4}
+.f2{font-family:Anton,Impact,sans-serif;font-size:62px;line-height:1.02;text-transform:uppercase}.f2 span{color:#ffd23f}
+footer{display:flex;justify-content:space-between;border-top:4px solid #141414;padding-top:12px;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+
+.clas{width:100%;border-collapse:collapse;font-size:19px}
+.clas td{padding:7px 4px;border-bottom:1px solid #3a3a3a}
+.clas .p{font-family:Anton,Impact,sans-serif;width:44px;color:#ffd23f;font-size:22px}
+.clas .pts{text-align:right;font-family:Anton,Impact,sans-serif;font-size:24px}
+.clas .first td{color:#ffd23f}
+.ficha{display:flex;flex-direction:column;gap:8px;font-size:17px;line-height:1.3}
+.feature{display:flex;gap:26px;border:4px double #141414;background:#fff8dc;padding:22px;align-items:center}
+.feature img{width:260px;height:320px;object-fit:cover;object-position:center 30%;border:3px solid #141414;flex-shrink:0}
+.feat-txt{display:flex;flex-direction:column;gap:10px}
+.feat-h{font-family:Anton,Impact,sans-serif;font-size:46px;line-height:1}
+.feat-txt p{margin:0;font-size:19px;line-height:1.45}
+.sec-t{font-family:Anton,Impact,sans-serif;font-size:40px;letter-spacing:.03em;border-bottom:4px solid #c8102e;padding-bottom:8px;margin-bottom:16px}
+.vest{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.v{background:#fff;border:3px solid #141414;padding:16px 18px}
+.v b{font-family:Anton,Impact,sans-serif;font-weight:400;font-size:24px;letter-spacing:.03em}
+.v p{margin:6px 0 0;font-size:17px;line-height:1.4}
+
+.score{display:flex;align-items:stretch;background:#141414;color:#f5f0e4;border:4px solid #141414}
+.sc-side{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:28px 16px;text-align:center}
+.sc-pos{font-family:Anton,Impact,sans-serif;font-size:30px;color:#ffd23f}
+.sc-name{font-family:Anton,Impact,sans-serif;font-size:38px;letter-spacing:.02em}
+.sc-pts{font-family:Anton,Impact,sans-serif;font-size:190px;line-height:.95}
+.yel-t{color:#ffd23f}
+.sc-tag{font-size:18px;font-style:italic}
+.sc-mid{display:flex;flex-direction:column;justify-content:center;align-items:center;background:#c8102e;padding:0 26px;gap:8px}
+.sc-dash{font-family:Anton,Impact,sans-serif;font-size:90px;line-height:1}
+.sc-diff{font-family:Anton,Impact,sans-serif;font-size:24px;letter-spacing:.06em}
+.hero2{display:flex;gap:20px}.hero2 .box{flex:1}
+.hero2 .clas td{font-size:17px}
+.inon{display:flex;align-items:center;gap:12px;font-family:Anton,Impact,sans-serif;font-size:96px;flex-shrink:0;line-height:1}
+.inon .in{color:#c8102e;text-decoration:line-through}
+.inon .slash{font-size:60px}
+.exile{background:#c8102e;color:#fff;padding:22px 26px;display:flex;flex-direction:column;gap:8px}
+.ex-t{font-family:Anton,Impact,sans-serif;font-size:30px;letter-spacing:.03em}
+.exile p{margin:0;font-size:19px;line-height:1.45}
+
+.scandal{background:#141414;color:#f5f0e4;padding:28px 30px;display:flex;flex-direction:column;gap:12px;border-left:12px solid #c8102e}
+.sc-label{align-self:flex-start;background:#c8102e;color:#fff;font-family:Anton,Impact,sans-serif;font-size:22px;letter-spacing:.06em;padding:6px 14px}
+.scandal-h{font-family:Anton,Impact,sans-serif;font-size:54px;line-height:1;color:#ffd23f}
+.scandal p{margin:0;font-size:19px;line-height:1.5}
+.verdict{background:#f5f0e4;color:#141414;padding:12px 16px;font-size:18px}
+
+.mvp{display:flex;align-items:stretch;border:4px solid #141414;background:#ffd23f}
+.mvp-l{flex:1;padding:28px 30px;display:flex;flex-direction:column;gap:10px}
+.mvp-lbl{align-self:flex-start;background:#141414;color:#ffd23f;font-family:Anton,Impact,sans-serif;font-size:22px;letter-spacing:.06em;padding:6px 14px}
+.mvp-name{font-family:Anton,Impact,sans-serif;font-size:72px;line-height:1}
+.mvp-wins{display:flex;gap:12px}
+.mvp-wins span{background:#141414;color:#fff;font-family:Anton,Impact,sans-serif;font-size:26px;padding:6px 14px}
+.mvp-sub{font-size:20px;font-weight:600}
+.mvp-r{background:#c8102e;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 34px}
+.mvp-n{font-family:Anton,Impact,sans-serif;font-size:170px;line-height:1}
+.mvp-cap{font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.hero2 .pericial td{font-size:16px}
+.hero2 .pericial td:last-child{text-align:right}
+</style></head>
+<body><div id="scaler"><div id="wrap"><div class="page">
+
+<div class="topbar"><span>Jueves, 22 de octubre de 2026</span><span>Road to Napicol 2027 · J36 · J37 · Sob10 · J39 · J40 · Sob11</span><span>Precio: tres victorias seguidas</span></div>
+
+<header class="mast">
+<div class="mast-row">
+<svg width="78" height="78" viewBox="0 0 84 84" aria-hidden="true"><rect x="4" y="4" width="76" height="76" rx="14" fill="#141414"/><circle cx="24" cy="24" r="7" fill="#f5f0e4"/><circle cx="42" cy="42" r="7" fill="#c8102e"/><circle cx="60" cy="60" r="7" fill="#f5f0e4"/></svg>
+<h1>EL NAPICOL</h1>
+<svg width="78" height="78" viewBox="0 0 84 84" aria-hidden="true"><rect x="4" y="4" width="76" height="76" rx="14" fill="#141414"/><circle cx="24" cy="24" r="7" fill="#f5f0e4"/><circle cx="60" cy="24" r="7" fill="#f5f0e4"/><circle cx="24" cy="60" r="7" fill="#f5f0e4"/><circle cx="60" cy="60" r="7" fill="#c8102e"/></svg>
+</div>
+<div class="tagline">Periódico oficial de la liga de póker de dados · Road to Napicol 2027</div>
+</header>
+
+<div class="strip"><div class="tag red">HISTÓRICO</div><div class="tag yellow">RACHA VICTIMILLA</div><div class="strip-r">Seis partidas · A 10 días del deadline</div></div>
+
+<section class="head">
+<div class="kicker">LA VÍCTIMA SE CONVIERTE EN VERDUGO</div>
+<h2>¡Victimilla arrasa! <span class="red-t">Tres seguidas</span> y +22… y aun así se queja</h2>
+<p class="sub">Adolf Victimilla firma la racha más brutal de su carrera y es el MVP del día. Il Cazatore sigue líder con 112, pero recibe piscinas de todos. Super Sapiens 👑✝️ y Anitín Poceiro ✝️, de luto, se acercan. Tres jugadores en siete puntos.</p>
+</section>
+
+<section class="mvp">
+<div class="mvp-l">
+<div class="mvp-lbl">MVP DE LA JORNADA</div>
+<div class="mvp-name">ADOLF VICTIMILLA</div>
+<div class="mvp-wins"><span>J36 ✓</span><span>J37 ✓</span><span>J39 ✓</span></div>
+<div class="mvp-sub">Tres victorias consecutivas en normales. Racha histórica.</div>
+</div>
+<div class="mvp-r"><div class="mvp-n">+22</div><div class="mvp-cap">puntos en una noche</div></div>
+</section>
+
+<section class="hero2">
+<div class="box dark">
+<div class="box-t yel">CLASIFICACIÓN GENERAL</div>
+<table class="clas">
+<tr class="first"><td class="p">1º</td><td>Il Cazatore</td><td class="pts">112</td></tr>
+<tr><td class="p">2º</td><td>Super Sapiens 👑✝️</td><td class="pts">109</td></tr>
+<tr><td class="p">3º</td><td>Anitín Poceiro ✝️</td><td class="pts">105</td></tr>
+<tr><td class="p">4º</td><td>Adolf Victimilla</td><td class="pts">99</td></tr>
+<tr><td class="p">5º</td><td>El Judío Supremo</td><td class="pts">82</td></tr>
+</table>
+<div class="small">Del primero al tercero, siete puntos. Napicol huele a final de infarto.</div>
+</div>
+<div class="box white">
+<div class="box-t line">EL PISCINÓMETRO</div>
+<table class="pericial">
+<tr><th>Lanzador</th><th>Víctimas</th></tr>
+<tr><td>Adolf Victimilla</td><td>Super Sapiens, Anitín ×2, Il Cazatore</td></tr>
+<tr><td>Il Cazatore</td><td>Super Sapiens ×2</td></tr>
+<tr><td>Super Sapiens 👑✝️</td><td>Il Cazatore</td></tr>
+<tr><td>Anitín Poceiro ✝️</td><td>Victimilla, Il Cazatore</td></tr>
+<tr><td>El Judío Supremo</td><td>Il Cazatore</td></tr>
+</table>
+<div class="small" style="margin-top:6px">Il Cazatore recibió cuatro: una de cada rival. Pleno.</div>
+</div>
+</section>
+
+<section class="cols">
+<div class="col">
+<p><strong class="lead-in">EL MUNDO AL REVÉS.</strong> Casi dos años esperando que el universo le diera algo, y hoy el universo se lo dio todo de golpe. Adolf Victimilla ganó la J36, la J37 y la J39, tres partidas normales consecutivas, y cerró la noche con +22 puntos. En la J36, con una suerte de locos, arrasó a los cuatro rivales sin contemplaciones. Fue una exhibición. Fue histórico. Y, por supuesto, se pasó la noche quejándose.</p>
+<p>Porque el victimismo no descansa ni cuando gana. Entre victoria y victoria, Victimilla siguió reclamando viejas glorias, protestando tiradas ajenas y recordando a la mesa todo lo que el destino le debe. Repartió además piscinas a Super Sapiens 👑✝️, dos a Anitín y una a Il Cazatore. Ganó como un campeón y habló como un damnificado.</p>
+<blockquote>“Tres victorias seguidas, +22 puntos… y la queja intacta. El victimismo es el único récord que no se le resiste.”</blockquote>
+<p>El líder, Il Cazatore, vivió una noche de súbdito. Ganó la Sob10 fiel a su doctrina: esperar, no mojarse, no arriesgar y sobrevivir mientras los demás se eliminaban. Victoria por supervivencia, no por mérito. Pero en la Sob11 le pillaron el truco y acabó último. Encima, le cayeron piscinas de todos los jugadores de la mesa. Definición oficial, ya sin discusión: gana por Moñigas o no gana.</p>
+</div>
+<div class="col">
+<p>De luto y con la cruz, Super Sapiens 👑✝️ empezó la noche sin poder jugar la J36, fulminado por dos piscinas seguidas del Moñigas. Respondió con otra piscina de vuelta y, en la Sob11, sacó el orgullo de campeón para quedar segundo. Se coloca a solo tres puntos del líder. Sigue convencido de su superioridad humana, y aunque le está costando, la tabla empieza a darle algo de razón.</p>
+<p>Su compañero de luto, Anitín Poceiro ✝️, se llevó la partida más importante del día: la Sob11, con autoridad. Le tiró piscina a Victimilla y otra al Moñigas, y recorta hasta quedarse a siete puntos del primero. Callado, constante y cada vez más cerca. Peligroso.</p>
+<p>Y El Judío Supremo cerró el peor día de todos, con solo +12. Sin autopiscinas, eso sí, y con un gesto de valentía inusual: piscina al Moñigas. Por lo demás, perfil bajo. Al novatín de la Liga le está costando arrancar la moto, y quedan diez días para el 1 de noviembre. Algún día arrancará. Lo que nadie sabe es si será antes del deadline.</p>
+</div>
+</section>
+
+<section class="scandal">
+<div class="sc-label">LA PARADOJA DE LA JORNADA</div>
+<div class="scandal-h">GANA TRES SEGUIDAS Y SE SIGUE QUEJANDO</div>
+<p>Los científicos de la LOD llevan años intentando entender a Adolf Victimilla. Hoy, el experimento definitivo: darle tres victorias seguidas y +22 puntos para ver si dejaba de quejarse. Resultado: no. La queja no depende del resultado. Es una constante universal, como la gravedad o como el Moñigas esperando en una mesa de tres.</p>
+<div class="verdict"><b>Conclusión del estudio:</b> Victimilla no se queja porque pierde. Victimilla se queja porque existe.</div>
+</section>
+
+<section>
+<div class="sec-t">NOTAS DE VESTUARIO</div>
+<div class="vest">
+<div class="v"><b>Adolf Victimilla</b><p>MVP, tres seguidas, +22 y piscinas a tres rivales. Una noche perfecta arruinada solo por él mismo, quejándose de lo bien que le iba. Que alguien le explique que ganar también se celebra.</p></div>
+<div class="v"><b>Il Cazatore</b><p>Líder con 112 y aun así súbdito de la mesa: cuatro piscinas, una de cada uno. Gana la Sob10 sin tocar el agua y en la Sob11 se ahoga. Gana por Moñigas o no gana.</p></div>
+<div class="v"><b>Super Sapiens 👑✝️</b><p>Fulminado en la J36 antes de empezar, de luto y aun así a tres puntos del líder. Humanamente superior, dice él. Los dados, por ahora, piden más pruebas.</p></div>
+<div class="v"><b>Anitín Poceiro ✝️</b><p>Gana la Sob11, la que más pesaba, y se planta a siete. Sin ruido, sin dramas y con cara de quien ya ha mirado la carta de Napicol.</p></div>
+<div class="v"><b>El Judío Supremo</b><p>+12, el peor del día. Pero sin piscinas propias y con una al Moñigas. Para su nivel, una noche casi impecable. La moto sigue sin arrancar, pero al menos ya no se cae.</p></div>
+<div class="v"><b>El Moñigómetro</b><p>Lectura del día: máxima en la Sob10, cero en la Sob11. El aparato confirma el diagnóstico: sin moñigas, no hay Cazatore.</p></div>
+</div>
+</section>
+
+<section class="final">
+<div class="f1">Un Victimilla imparable, un líder súbdito, dos enlutados al acecho y un novato que sigue calentando motor.</div>
+<div class="f2">112, 109, 105… <span>¿quién llegará vivo a Napicol?</span></div>
+</section>
+
+<footer><span class="red-t">El Napicol · Crónica de la jornada</span><span>Seguiremos informando. Aunque Victimilla se queje.</span></footer>
+</div>
+</div></div>
+<script>
+function fit(){var w=document.getElementById('wrap'),s=document.getElementById('scaler');var k=Math.min(1,window.innerWidth/1080);
+w.style.transform=k<1?'scale('+k+')':'';w.style.marginLeft=k<1?'0':'auto';s.style.height=k<1?(w.offsetHeight*k)+'px':'';}
+window.addEventListener('resize',fit);window.addEventListener('load',fit);fit();
+</script></body></html>
