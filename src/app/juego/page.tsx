@@ -149,6 +149,7 @@ export default function Juego() {
           kind: saved.kind ?? "normal",
           bustOrder: saved.bustOrder ?? [],
           secadas: saved.secadas ?? {},
+          tiradas: saved.tiradas ?? {},
           pending: saved.pending.map((m: Game["pending"][number]) => ({ ...m, kind: m.kind ?? "vida", from_jugador_id: m.from_jugador_id ?? null })),
         });
     } catch {}
@@ -168,7 +169,18 @@ export default function Juego() {
   return (
     <>
       {game ? <Board game={game} update={update} onFinished={(g, l) => { setSummary(g); setLiga(l); }} /> : <Setup onStart={(g) => update(() => g)} />}
-      {summary && <Summary game={summary} liga={liga} onRetry={async () => setLiga(await cerrarPartida(summary.id))} onClose={() => setSummary(null)} />}
+      {summary && (
+        <Summary
+          game={summary}
+          liga={liga}
+          onRetry={async () => setLiga(await cerrarPartida(summary.id))}
+          onSalir={() => setSummary(null)}
+          onOtra={(kind) => {
+            update(() => newGame(kind === "sobrante" ? SOBRANTES : NORMAL, kind, summary.seats));
+            setSummary(null);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -176,9 +188,18 @@ export default function Juego() {
 type Liga = { jornada: number | null; error: string | null };
 
 // Resumen al cerrar una partida: puestos y puntos de liga según la tabla normal o de sobrantes
-function Summary({ game, liga, onRetry, onClose }: { game: Game; liga: Liga | null; onRetry: () => void; onClose: () => void }) {
+function Summary({ game, liga, onRetry, onSalir, onOtra }: {
+  game: Game;
+  liga: Liga | null;
+  onRetry: () => void;
+  onSalir: () => void;
+  onOtra: (kind: JornadaKind) => void;
+}) {
+  const [eligiendo, setEligiendo] = useState(false); // otra partida: ¿normal o sobrantes?
   const rows = finalStandings(game);
   const medal = ["🥇", "🥈", "🥉"];
+  const minutos = game.endedAt ? Math.max(1, Math.round((Date.parse(game.endedAt) - Date.parse(game.startedAt)) / 60000)) : null;
+  const piscinas = Object.values(game.secadas ?? {}).reduce((a, b) => a + b, 0);
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/75 p-3 backdrop-blur-sm sm:items-center">
       <div className="max-h-full w-full max-w-md space-y-4 overflow-y-auto rounded-3xl bg-felt p-5 shadow-2xl">
@@ -187,6 +208,9 @@ function Summary({ game, liga, onRetry, onClose }: { game: Game; liga: Liga | nu
           <h2 className="text-2xl font-bold">Resumen de la partida</h2>
           <p className="text-sm text-muted">
             {game.kind === "sobrante" ? "Sobrantes" : "Normal"} · {game.start} vidas · {game.seats.length} jugadores
+          </p>
+          <p className="text-sm text-muted">
+            {minutos && `⏱ ${minutos} min · `}🏊 {piscinas} {piscinas === 1 ? "piscina" : "piscinas"}
           </p>
         </div>
         <ol className="space-y-2">
@@ -197,6 +221,8 @@ function Summary({ game, liga, onRetry, onClose }: { game: Game; liga: Liga | nu
                 <Starred name={r.name} />
                 <span className="block text-xs font-medium opacity-85">
                   {r.lives < 0 ? "💀 BUST" : r.lives === 0 ? "vida cero" : `${r.lives} ${r.lives === 1 ? "vida" : "vidas"}`}
+                  {(game.tiradas?.[r.id] ?? 0) > 0 && ` · 🏊 ${game.tiradas[r.id]} lanzada${game.tiradas[r.id] > 1 ? "s" : ""}`}
+                  {(game.secadas?.[r.id] ?? 0) > 0 && ` · 💧 ${game.secadas[r.id]} recibida${game.secadas[r.id] > 1 ? "s" : ""}`}
                 </span>
               </span>
               <span className="text-right [text-shadow:0_1px_4px_rgba(0,0,0,.4)]">
@@ -214,7 +240,28 @@ function Summary({ game, liga, onRetry, onClose }: { game: Game; liga: Liga | nu
             <button onClick={onRetry} className="rounded-full bg-red px-4 py-1.5 font-semibold text-white">Reintentar</button>
           </div>
         )}
-        <button onClick={onClose} className="w-full rounded-2xl bg-gold py-3.5 text-lg font-bold text-felt">Cerrar</button>
+        {eligiendo ? (
+          <div className="space-y-2">
+            <p className="text-center font-semibold">¿Qué jugamos ahora?</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { k: "normal" as const, label: "Normal", v: NORMAL, pts: "5-3-2-1-0" },
+                { k: "sobrante" as const, label: "Sobrantes", v: SOBRANTES, pts: "9-6-4-2-0" },
+              ].map((o) => (
+                <button key={o.k} onClick={() => onOtra(o.k)} className="rounded-2xl bg-gold py-3.5 font-bold text-felt">
+                  {o.label}
+                  <span className="block text-xs font-medium opacity-80">{o.v} vidas · {o.pts}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setEligiendo(false)} className="w-full py-2 text-sm text-muted">Volver</button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={onSalir} className="rounded-2xl border border-line py-3.5 text-lg font-semibold text-ink">🚪 Salir</button>
+            <button onClick={() => setEligiendo(true)} className="rounded-2xl bg-gold py-3.5 text-lg font-bold text-felt">↺ Otra partida</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -564,7 +611,11 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
   function piscina(thrower: Seat, victim: Seat) {
     setPicker(null);
     const next = hit(game, victim.id, "piscina", thrower.id);
-    apply(victim.id, { ...next, secadas: { ...next.secadas, [victim.id]: (next.secadas[victim.id] ?? 0) + 1 } });
+    apply(victim.id, {
+      ...next,
+      secadas: { ...next.secadas, [victim.id]: (next.secadas[victim.id] ?? 0) + 1 },
+      tiradas: { ...next.tiradas, [thrower.id]: (next.tiradas[thrower.id] ?? 0) + 1 },
+    });
     setSecado({ thrower, victim });
     clearTimeout(timers.current.secado);
     timers.current.secado = setTimeout(() => setSecado(null), 3500);
@@ -578,11 +629,6 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
     const liga = res.error ? { jornada: null, error: res.error } : await cerrarPartida(ended.id);
     update(next);
     onFinished(ended, liga);
-  }
-
-  function rematch() {
-    if (!confirm("¿Guardar esta partida y empezar otra con los mismos jugadores?")) return;
-    finish(() => newGame(game.start, game.kind, game.seats));
   }
 
   function exit() {
@@ -708,7 +754,6 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
           >
             {ordering ? "✓ Listo" : "⇅ Ordenar"}
           </button>
-          <button onClick={rematch} aria-label="Nueva partida" className="h-9 w-9 rounded-full text-lg">↺</button>
           <button onClick={() => setMenu(true)} aria-label="Terminar o cancelar" className="h-9 w-9 rounded-full text-lg">✕</button>
         </div>
       </div>
@@ -756,15 +801,20 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
           <div className="w-full max-w-sm space-y-4 rounded-3xl p-6 text-center text-white shadow-2xl" style={{ background: tileBg(winner.color), containerType: "inline-size" }}>
             <p className="text-6xl">🏆</p>
+            <p className="animate-splash text-[1.7rem] font-black uppercase leading-tight [text-shadow:0_2px_10px_rgba(0,0,0,.45)]">
+              ¡SUUUP!
+              <span className="block text-xl">Has secado a todos, máquina</span>
+            </p>
             <FitName name={winner.name} max={14} className="text-[2rem] font-bold [text-shadow:0_2px_10px_rgba(0,0,0,.4)]" />
             <p className="font-medium">
               gana {winner.lives === 0 ? "en vida cero" : `con ${winner.lives} ${winner.lives === 1 ? "vida" : "vidas"}`}
             </p>
             <div className="grid gap-2 pt-2">
-              <button onClick={rematch} className="rounded-xl bg-white py-3 font-bold text-black">↺ Otra partida</button>
-              <button onClick={exit} className="rounded-xl bg-black/30 py-3 font-semibold">Terminar</button>
-              <button onClick={() => setDismissed(winner.id)} className="py-1 text-sm text-white/80">Seguir jugando</button>
-              <button onClick={cancel} className="text-xs text-white/60 underline">🗑 Cancelar partida (no cuenta)</button>
+              <button onClick={exit} className="rounded-xl bg-white py-3.5 text-lg font-bold text-black">🏁 Finalizar partida</button>
+              <div className="flex justify-center gap-4 pt-1 text-xs text-white/75">
+                <button onClick={() => setDismissed(winner.id)} className="underline">¿Ha sido un error? Seguir jugando</button>
+                <button onClick={cancel} className="underline">🗑 Cancelar (no cuenta)</button>
+              </div>
             </div>
           </div>
         </div>
