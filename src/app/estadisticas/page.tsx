@@ -240,7 +240,7 @@ export default function Estadisticas() {
               ["🏆", (s) => s.jornadaWins],
               ["Podios", (s) => s.podios],
               ...Array.from({ length: Math.max(0, ...stats.map((s) => s.puestos.length)) - 1 }, (_, i): [string, (s: PlayerStats) => number] => [`${i + 2}º`, (s) => s.puestos[i + 1] ?? 0]),
-              ["🏮 Último", (s) => s.ultimos],
+              ["🔻 Último de la jornada", (s) => s.ultimos],
               ["Puesto medio", (s) => fmt(s.avgPos)],
               ["🔥 Racha", (s) => s.jornadaStreak],
               ["Mejor racha", (s) => s.bestJornadaStreak],
@@ -654,7 +654,7 @@ function Individual({ history, stats, standings, focus, onFocus, sanciones, fina
       title: "🥇 Puestos en jornadas",
       items: [
         ...(st?.puestos ?? []).map((n, i): [string, string | number] => [`${i + 1}º`, n]),
-        ["🏮 Último", st?.ultimos ?? 0],
+        ["🔻 Último de la jornada", st?.ultimos ?? 0],
       ],
     },
     {
@@ -775,7 +775,7 @@ function Puestos({ stats }: { stats: PlayerStats[] }) {
               {Array.from({ length: n }, (_, i) => (
                 <th key={i} className="font-normal">{i === 0 ? "🏆 1º" : `${i + 1}º`}</th>
               ))}
-              <th className="font-normal">🏮 Último</th>
+              <th className="font-normal">🔻 Último</th>
               <th className="font-normal">J</th>
             </tr>
           </thead>
@@ -798,7 +798,7 @@ function Puestos({ stats }: { stats: PlayerStats[] }) {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-muted">Último = último de su jornada (con wildcards puede ser el 6º). Pasa el dedo o el ratón por una celda para ver el %.</p>
+      <p className="mt-2 text-xs text-muted">🔻 Último = quedar el último en esa jornada: el 4º cuando se jugaba a 4 (antes de que entrara El Judío Supremo), el 5º si erais 5, el 6º con wildcard. Por eso no coincide con la columna 5º. No confundir con el 🏮 farolillo rojo, que es irse a casa último en la clasificación general. Pasa el dedo o el ratón por una celda para ver el %.</p>
     </Card>
   );
 }
