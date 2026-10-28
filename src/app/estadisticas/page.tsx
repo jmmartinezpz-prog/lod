@@ -48,6 +48,16 @@ const fmt = (n: number | null, d = 1) => (n === null ? "–" : n.toFixed(d).repl
 const hora = (ms: number) => new Date(ms).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
 const fecha = (iso: string) => new Date(iso).toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
 
+type Tab = "liga" | "jugadores" | "partidas" | "piscinas" | "records";
+const TABS: { id: Tab; label: string; sub: string }[] = [
+  { id: "liga", label: "🏆 Liga", sub: "progreso, puestos, finales" },
+  { id: "jugadores", label: "👤 Jugadores", sub: "ficha y racha" },
+  { id: "partidas", label: "⚔️ Partidas", sub: "vidas y modo juego" },
+  { id: "piscinas", label: "🏊 Piscinas", sub: "palmarés y quién a quién" },
+  { id: "records", label: "🏅 Récords", sub: "lo mejor y lo peor" },
+];
+const TAB_KEY = "lod-stats-tab";
+
 export default function Estadisticas() {
   const league = useLeague();
   const juego = usePartidas();
@@ -56,6 +66,20 @@ export default function Estadisticas() {
   const [preset, setPreset] = useState<Preset>("todo");
   const [custom, setCustom] = useState<Range>({ from: null, to: null });
   const [selected, setSelected] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("liga");
+  useEffect(() => {
+    try {
+      const t = localStorage.getItem(TAB_KEY) as Tab | null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (t && TABS.some((x) => x.id === t)) setTab(t);
+    } catch {}
+  }, []);
+  function elegirTab(t: Tab) {
+    setTab(t);
+    try {
+      localStorage.setItem(TAB_KEY, t);
+    } catch {}
+  }
   const range = presetRange(preset, custom, now);
 
   const todas = useMemo(
@@ -151,41 +175,21 @@ export default function Estadisticas() {
         <Tile icon="📜" label="Historia" value={sum((s) => s.historia)} />
       </section>
 
-      <Card title="📈 Progreso de la liga">
-        <ProgressChart history={periodo} focus={focus} onFocus={setFocus} />
-        <p className="mt-2 text-xs text-muted">Toca o pasa el ratón por la gráfica para ver cada jornada · D = inicio de cada día · toca un nombre para resaltarlo</p>
-      </Card>
-
-      <Individual
-        history={periodo}
-        stats={stats}
-        standings={league.standings.map((s) => ({ key: s.player.id, points: s.points }))}
-        focus={focus ?? league.standings[0]?.player.id ?? null}
-        onFocus={setFocus}
-        sanciones={sanciones}
-        finales={fin}
-      />
-
-      <Puestos stats={stats} />
-      <CaraACara finales={fin} />
-
-      {/* Récords */}
-      {recs.length > 0 && (
-        <Card title="🏅 Récords">
-          <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {recs.map((r) => (
-              <li key={r.title} className="flex items-center gap-3 rounded-xl bg-felt p-3">
-                <span className="text-2xl">{r.icon}</span>
-                <div className="min-w-0">
-                  <p className="text-xs text-muted">{r.title}</p>
-                  <p className="font-bold leading-tight">{r.who}</p>
-                  <p className="text-xs text-muted">{r.value}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      {/* Secciones: todas las estadísticas, agrupadas para no perderse */}
+      <nav className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => elegirTab(t.id)}
+            className={`flex shrink-0 flex-col items-start rounded-2xl px-3.5 py-2 text-left ${
+              tab === t.id ? "bg-gold text-felt" : "border border-line text-muted"
+            }`}
+          >
+            <span className="text-sm font-bold">{t.label}</span>
+            <span className={`text-[11px] ${tab === t.id ? "text-felt/75" : "text-muted"}`}>{t.sub}</span>
+          </button>
+        ))}
+      </nav>
 
       {juego.error && (
         <p className="rounded-lg border border-red/50 bg-red/10 p-3 text-sm text-red">
@@ -218,163 +222,218 @@ export default function Estadisticas() {
         </section>
       )}
 
-      {/* Partida a partida */}
-      <Card title="📈 Vidas durante la partida">
-        {!shown ? (
-          <Empty />
-        ) : (
-          <div className="space-y-4">
-            <select value={shown.partida.id} onChange={(e) => setSelected(e.target.value)}>
-              {enRango.toReversed().map((r) => (
-                <option key={r.partida.id} value={r.partida.id}>
-                  {r.live ? "🔴 En directo · " : ""}
-                  {fecha(r.partida.started_at)} {hora(r.startAt)}
-                  {r.winner ? ` · 🏆 ${r.winner.name}` : ""}
-                </option>
-              ))}
-            </select>
-            <LivesChart r={shown} />
-            <Eliminaciones r={shown} />
-            {permiso.puede && <button
-              onClick={async () => {
-                if (!confirm("¿Anular esta partida?\n\nDesaparecerá de todas las estadísticas y se borrará su jornada de liga (para pruebas o errores).")) return;
-                const error = await cancelPartida(shown.partida.id);
-                if (error) alert(`No se ha podido anular: ${error}`);
-                else setSelected(null);
-              }}
-              className="text-xs text-muted underline"
-            >
-              🗑 Anular esta partida (era una prueba o un error)
-            </button>}
-          </div>
-        )}
-      </Card>
-
-      {/* Racha y forma */}
-      <Card title="🔥 Racha y forma (últimas 10 partidas)">
-        {terminadas.length === 0 ? (
-          <Empty />
-        ) : (
-          <ul className="space-y-2.5">
-            {stats.filter((s) => s.partidas > 0).sort((a, b) => b.streak - a.streak || b.wins - a.wins).map((s) => (
-              <li key={s.key} className="flex items-center gap-2">
-                <Name s={s} className="w-32 shrink-0" />
-                <div className="flex flex-1 flex-wrap gap-1">
-                  {s.form.map((f) => (
-                    <span
-                      key={f.partidaId}
-                      title={`${f.place}º de ${f.of}`}
-                      className={`tabular flex h-6 w-6 items-center justify-center rounded text-xs font-bold ${
-                        f.place === 1 ? "bg-gold text-felt" : f.place === f.of ? "bg-red/25 text-red" : "bg-felt text-muted"
-                      }`}
-                    >
-                      {f.place === 1 ? "🏆" : f.place === f.of ? "💀" : f.place}
-                    </span>
-                  ))}
-                </div>
-                <span className="tabular w-10 text-right text-sm font-bold">{s.streak > 0 ? `🔥${s.streak}` : ""}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="mt-3 text-xs text-muted">🏆 ganó · número = puesto · 💀 primero en caer · 🔥 victorias seguidas ahora mismo</p>
-      </Card>
-
-      {/* Barras */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <Bars title="⭐ Puntos en partidas" stats={stats} pick={(s) => s.juegoPts} />
-        <Bars title="🏆 Partidas ganadas" stats={stats} pick={(s) => s.wins} />
-        <Bars title="🪦 Primero en caer" stats={stats} pick={(s) => s.firstOut} />
-        <Bars title="🏊 Piscinas entregadas" stats={stats} pick={(s) => s.pisDadas} />
-        <Bars title="💧 Piscinas recibidas" stats={stats} pick={(s) => s.pisRecibidas} />
-        <Bars title="📜 Puntos de historia" stats={stats} pick={(s) => s.historia} />
-        <Bars title="🤦 Autopiscinas" stats={stats} pick={(s) => s.autopiscinas} />
-        <Bars title="🩸 Vidas perdidas" stats={stats} pick={(s) => s.lost} />
-        <Bars title="🏊 Piscinas lanzadas (partidas)" stats={stats} pick={(s) => s.thrown} />
-        <Bars title="💧 Piscinas recibidas (partidas)" stats={stats} pick={(s) => s.received} />
-      </div>
-
-      <Balance stats={stats} />
-
-      {pairs.length > 0 && (
-        <Card title="🏊 Quién le lanza piscinas a quién">
-          <ul className="space-y-1.5">
-            {pairs.slice(0, 12).map((p) => (
-              <li key={`${p.from.key}>${p.to.key}`} className="flex items-center gap-2 rounded-lg bg-felt px-3 py-2 text-sm">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.from.color }} />
-                <span className="flex-1 leading-tight"><Starred name={p.from.name} /></span>
-                <span className="text-muted">→</span>
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.to.color }} />
-                <span className="flex-1 leading-tight"><Starred name={p.to.name} /></span>
-                <span className="tabular w-8 text-right font-bold">{p.n}</span>
-              </li>
-            ))}
-          </ul>
+      {tab === "liga" && (
+        <>
+        <Card title="📈 Progreso de la liga">
+          <ProgressChart history={periodo} focus={focus} onFocus={setFocus} />
+          <p className="mt-2 text-xs text-muted">Toca o pasa el ratón por la gráfica para ver cada jornada · D = inicio de cada día · toca un nombre para resaltarlo</p>
         </Card>
+
+        <Puestos stats={stats} />
+        <CaraACara finales={fin} />
+        <Card title="🎲 Liga (jornadas registradas)">
+          <Table
+            stats={stats.filter((s) => s.jornadas > 0).sort((a, b) => b.ligaPts - a.ligaPts)}
+            cols={[
+              ["J", (s) => s.jornadas],
+              ["Pts", (s) => s.ligaPts],
+              ["🏆", (s) => s.jornadaWins],
+              ["Podios", (s) => s.podios],
+              ...Array.from({ length: Math.max(0, ...stats.map((s) => s.puestos.length)) - 1 }, (_, i): [string, (s: PlayerStats) => number] => [`${i + 2}º`, (s) => s.puestos[i + 1] ?? 0]),
+              ["🏮 Último", (s) => s.ultimos],
+              ["Puesto medio", (s) => fmt(s.avgPos)],
+              ["🔥 Racha", (s) => s.jornadaStreak],
+              ["Mejor racha", (s) => s.bestJornadaStreak],
+            ]}
+          />
+        </Card>
+
+        <Penalizaciones
+          adjustments={league.adjustments}
+          jornadas={league.jornadas}
+          dias={league.dias}
+          players={league.players}
+          stats={stats}
+          range={range}
+        />
+        </>
       )}
 
-
-      {/* Tablas completas */}
-      <Card title="⚔️ Modo juego">
-        <Table
-          stats={stats.filter((s) => s.partidas > 0).sort((a, b) => b.juegoPts - a.juegoPts || b.wins - a.wins)}
-          cols={[
-            ["PJ", (s) => s.partidas],
-            ["Pts", (s) => s.juegoPts],
-            ["🏆", (s) => s.wins],
-            ["% vict.", (s) => `${Math.round((s.wins / s.partidas) * 100)}%`],
-            ["Puesto medio", (s) => fmt(s.avgPlace)],
-            ["💀 1º caer", (s) => s.firstOut],
-            ["🔥 Racha", (s) => s.streak],
-            ["Mejor racha", (s) => s.bestStreak],
-            ["🩸 Perdidas", (s) => s.lost],
-            ["🏊 Lanzadas", (s) => s.thrown],
-            ["💧 Recibidas", (s) => s.received],
-            ["0️⃣ Victorias en vida cero", (s) => s.zeroWins],
-            ["💚 Recuperadas", (s) => s.gained],
-          ]}
+      {tab === "jugadores" && (
+        <>
+        <Individual
+          history={periodo}
+          stats={stats}
+          standings={league.standings.map((s) => ({ key: s.player.id, points: s.points }))}
+          focus={focus ?? league.standings[0]?.player.id ?? null}
+          onFocus={setFocus}
+          sanciones={sanciones}
+          finales={fin}
         />
-      </Card>
 
-      <Card title="🎲 Liga (jornadas registradas)">
-        <Table
-          stats={stats.filter((s) => s.jornadas > 0).sort((a, b) => b.ligaPts - a.ligaPts)}
-          cols={[
-            ["J", (s) => s.jornadas],
-            ["Pts", (s) => s.ligaPts],
-            ["🏆", (s) => s.jornadaWins],
-            ["Podios", (s) => s.podios],
-            ...Array.from({ length: Math.max(0, ...stats.map((s) => s.puestos.length)) - 1 }, (_, i): [string, (s: PlayerStats) => number] => [`${i + 2}º`, (s) => s.puestos[i + 1] ?? 0]),
-            ["🏮 Último", (s) => s.ultimos],
-            ["Puesto medio", (s) => fmt(s.avgPos)],
-            ["🔥 Racha", (s) => s.jornadaStreak],
-            ["Mejor racha", (s) => s.bestJornadaStreak],
-          ]}
-        />
-      </Card>
+        {/* Racha y forma */}
+        <Card title="🔥 Racha y forma (últimas 10 partidas)">
+          {terminadas.length === 0 ? (
+            <Empty />
+          ) : (
+            <ul className="space-y-2.5">
+              {stats.filter((s) => s.partidas > 0).sort((a, b) => b.streak - a.streak || b.wins - a.wins).map((s) => (
+                <li key={s.key} className="flex items-center gap-2">
+                  <Name s={s} className="w-32 shrink-0" />
+                  <div className="flex flex-1 flex-wrap gap-1">
+                    {s.form.map((f) => (
+                      <span
+                        key={f.partidaId}
+                        title={`${f.place}º de ${f.of}`}
+                        className={`tabular flex h-6 w-6 items-center justify-center rounded text-xs font-bold ${
+                          f.place === 1 ? "bg-gold text-felt" : f.place === f.of ? "bg-red/25 text-red" : "bg-felt text-muted"
+                        }`}
+                      >
+                        {f.place === 1 ? "🏆" : f.place === f.of ? "💀" : f.place}
+                      </span>
+                    ))}
+                  </div>
+                  <span className="tabular w-10 text-right text-sm font-bold">{s.streak > 0 ? `🔥${s.streak}` : ""}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-3 text-xs text-muted">🏆 ganó · número = puesto · 💀 primero en caer · 🔥 victorias seguidas ahora mismo</p>
+        </Card>
+        </>
+      )}
 
-      <Card title="🏊 Palmarés">
-        <Table
-          stats={stats.filter((s) => s.pisDadas + s.pisRecibidas + s.autopiscinas + s.historia > 0).sort((a, b) => b.pisBalance - a.pisBalance)}
-          cols={[
-            ["🏊 Entregadas", (s) => s.pisDadas],
-            ["💧 Recibidas", (s) => s.pisRecibidas],
-            ["± Balance", (s) => (s.pisBalance > 0 ? `+${s.pisBalance}` : s.pisBalance)],
-            ["🤦 Autopiscinas", (s) => s.autopiscinas],
-            ["📜 Historia", (s) => s.historia],
-          ]}
-        />
-        <p className="mt-3 text-xs text-muted">Piscinas de las jornadas de liga + las del modo juego. Balance = entregadas − recibidas.</p>
-      </Card>
+      {tab === "partidas" && (
+        <>
+        {/* Partida a partida */}
+        <Card title="📈 Vidas durante la partida">
+          {!shown ? (
+            <Empty />
+          ) : (
+            <div className="space-y-4">
+              <select value={shown.partida.id} onChange={(e) => setSelected(e.target.value)}>
+                {enRango.toReversed().map((r) => (
+                  <option key={r.partida.id} value={r.partida.id}>
+                    {r.live ? "🔴 En directo · " : ""}
+                    {fecha(r.partida.started_at)} {hora(r.startAt)}
+                    {r.winner ? ` · 🏆 ${r.winner.name}` : ""}
+                  </option>
+                ))}
+              </select>
+              <LivesChart r={shown} />
+              <Eliminaciones r={shown} />
+              {permiso.puede && <button
+                onClick={async () => {
+                  if (!confirm("¿Anular esta partida?\n\nDesaparecerá de todas las estadísticas y se borrará su jornada de liga (para pruebas o errores).")) return;
+                  const error = await cancelPartida(shown.partida.id);
+                  if (error) alert(`No se ha podido anular: ${error}`);
+                  else setSelected(null);
+                }}
+                className="text-xs text-muted underline"
+              >
+                🗑 Anular esta partida (era una prueba o un error)
+              </button>}
+            </div>
+          )}
+        </Card>
 
-      <Penalizaciones
-        adjustments={league.adjustments}
-        jornadas={league.jornadas}
-        dias={league.dias}
-        players={league.players}
-        stats={stats}
-        range={range}
-      />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+  <Bars title="⭐ Puntos en partidas" stats={stats} pick={(s) => s.juegoPts} />
+  <Bars title="🏆 Partidas ganadas" stats={stats} pick={(s) => s.wins} />
+  <Bars title="🪦 Primero en caer" stats={stats} pick={(s) => s.firstOut} />
+  <Bars title="🩸 Vidas perdidas" stats={stats} pick={(s) => s.lost} />
+  <Bars title="🏊 Piscinas lanzadas (partidas)" stats={stats} pick={(s) => s.thrown} />
+  <Bars title="💧 Piscinas recibidas (partidas)" stats={stats} pick={(s) => s.received} />
+        </div>
+        {/* Tablas completas */}
+        <Card title="⚔️ Modo juego">
+          <Table
+            stats={stats.filter((s) => s.partidas > 0).sort((a, b) => b.juegoPts - a.juegoPts || b.wins - a.wins)}
+            cols={[
+              ["PJ", (s) => s.partidas],
+              ["Pts", (s) => s.juegoPts],
+              ["🏆", (s) => s.wins],
+              ["% vict.", (s) => `${Math.round((s.wins / s.partidas) * 100)}%`],
+              ["Puesto medio", (s) => fmt(s.avgPlace)],
+              ["💀 1º caer", (s) => s.firstOut],
+              ["🔥 Racha", (s) => s.streak],
+              ["Mejor racha", (s) => s.bestStreak],
+              ["🩸 Perdidas", (s) => s.lost],
+              ["🏊 Lanzadas", (s) => s.thrown],
+              ["💧 Recibidas", (s) => s.received],
+              ["0️⃣ Victorias en vida cero", (s) => s.zeroWins],
+              ["💚 Recuperadas", (s) => s.gained],
+            ]}
+          />
+        </Card>
+        </>
+      )}
+
+      {tab === "piscinas" && (
+        <>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+  <Bars title="🏊 Piscinas entregadas" stats={stats} pick={(s) => s.pisDadas} />
+  <Bars title="💧 Piscinas recibidas" stats={stats} pick={(s) => s.pisRecibidas} />
+  <Bars title="🤦 Autopiscinas" stats={stats} pick={(s) => s.autopiscinas} />
+  <Bars title="📜 Puntos de historia" stats={stats} pick={(s) => s.historia} />
+        </div>
+        <Balance stats={stats} />
+        {pairs.length > 0 && (
+          <Card title="🏊 Quién le lanza piscinas a quién">
+            <ul className="space-y-1.5">
+              {pairs.slice(0, 12).map((p) => (
+                <li key={`${p.from.key}>${p.to.key}`} className="flex items-center gap-2 rounded-lg bg-felt px-3 py-2 text-sm">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.from.color }} />
+                  <span className="flex-1 leading-tight"><Starred name={p.from.name} /></span>
+                  <span className="text-muted">→</span>
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: p.to.color }} />
+                  <span className="flex-1 leading-tight"><Starred name={p.to.name} /></span>
+                  <span className="tabular w-8 text-right font-bold">{p.n}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+
+
+        <Card title="🏊 Palmarés">
+          <Table
+            stats={stats.filter((s) => s.pisDadas + s.pisRecibidas + s.autopiscinas + s.historia > 0).sort((a, b) => b.pisBalance - a.pisBalance)}
+            cols={[
+              ["🏊 Entregadas", (s) => s.pisDadas],
+              ["💧 Recibidas", (s) => s.pisRecibidas],
+              ["± Balance", (s) => (s.pisBalance > 0 ? `+${s.pisBalance}` : s.pisBalance)],
+              ["🤦 Autopiscinas", (s) => s.autopiscinas],
+              ["📜 Historia", (s) => s.historia],
+            ]}
+          />
+          <p className="mt-3 text-xs text-muted">Piscinas de las jornadas de liga + las del modo juego. Balance = entregadas − recibidas.</p>
+        </Card>
+        </>
+      )}
+
+      {tab === "records" && (
+        <>
+        {/* Récords */}
+        {recs.length > 0 && (
+          <Card title="🏅 Récords">
+            <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {recs.map((r) => (
+                <li key={r.title} className="flex items-center gap-3 rounded-xl bg-felt p-3">
+                  <span className="text-2xl">{r.icon}</span>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted">{r.title}</p>
+                    <p className="font-bold leading-tight">{r.who}</p>
+                    <p className="text-xs text-muted">{r.value}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+        </>
+      )}
+
     </div>
   );
 }
