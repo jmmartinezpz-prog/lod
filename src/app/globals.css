@@ -45,4 +45,5 @@ input, select, textarea {
   color: var(--ink);
   width: 100%;
 }
+input[type="checkbox"], input[type="radio"] { width: auto; flex-shrink: 0; padding: 0; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--gold); outline-offset: 1px; }

@@ -21,7 +21,10 @@ export function normalizarLlave(code: string) {
 
 export function guardarLlave(code: string | null) {
   try {
-    if (code) localStorage.setItem(LLAVE_KEY, normalizarLlave(code));
+    if (code) {
+      localStorage.setItem(LLAVE_KEY, normalizarLlave(code));
+      navigator.storage?.persist?.();
+    }
     else localStorage.removeItem(LLAVE_KEY);
   } catch {}
   window.dispatchEvent(new Event(EVENTO));

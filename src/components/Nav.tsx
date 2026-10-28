@@ -65,19 +65,15 @@ export default function Nav() {
               {l.label}
             </Link>
           ))}
-          {session ? (
-            <button
-              onClick={() => supabase.auth.signOut()}
-              className="px-2 text-xs text-muted"
-            >
+          {!permiso.admin && permiso.nombre && (
+            <Link href="/login" className="max-w-24 truncate whitespace-nowrap rounded-full bg-card px-2.5 py-1 text-xs text-muted">
+              👤 {permiso.nombre}
+            </Link>
+          )}
+          {session && (
+            <button onClick={() => supabase.auth.signOut()} className="px-2 text-xs text-muted">
               Salir
             </button>
-          ) : (
-            !permiso.puede && (
-              <Link href="/login" className="px-2 py-1.5 text-xs text-muted">
-                🔑 Entrar
-              </Link>
-            )
           )}
         </div>
       </header>
