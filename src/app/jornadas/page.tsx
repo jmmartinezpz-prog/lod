@@ -23,7 +23,10 @@ export default function Jornadas() {
     const ids = new Set(items.map((j) => j.id));
     const sum = new Map<string, number>();
     for (const r of results) if (ids.has(r.jornada_id)) sum.set(r.player_id, (sum.get(r.player_id) ?? 0) + r.points);
-    for (const a of adjustments) if (a.jornada_id && ids.has(a.jornada_id)) sum.set(a.player_id, (sum.get(a.player_id) ?? 0) + a.points);
+    // Las sanciones sí cuentan en el día; los puntos regalados al entrar en la liga (alta, arrastre), no
+    for (const a of adjustments)
+      if (a.jornada_id && ids.has(a.jornada_id) && a.kind !== "alta" && a.kind !== "arrastre")
+        sum.set(a.player_id, (sum.get(a.player_id) ?? 0) + a.points);
     return players
       .filter((p) => !p.is_wildcard && sum.has(p.id))
       .map((p) => ({ p, pts: sum.get(p.id)! }))
