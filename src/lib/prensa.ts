@@ -53,10 +53,7 @@ export async function htmlDe(p: Periodico): Promise<string> {
   return data.html as string;
 }
 
-export const tituloDe = (html: string, fallback: string) => {
-  const t = /<title>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.trim();
-  return (t ? t.replace(/^El Napicol\s*[·|:-]\s*/i, "") : fallback).trim() || fallback;
-};
+export { tituloDe } from "./titulo";
 
 // ---------- Prompt del día ----------
 

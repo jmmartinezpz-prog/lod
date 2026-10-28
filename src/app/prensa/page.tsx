@@ -6,7 +6,7 @@ import { leagueHistory, regularsOf } from "@/lib/history";
 import { usePartidas } from "@/lib/partidas";
 import { ARCHIVO, PLANTILLA, htmlDe, promptDelDia, tituloDe, usePeriodicos, type Periodico } from "@/lib/prensa";
 import { dayOf, gameToday, resumir } from "@/lib/stats";
-import { supabase } from "@/lib/supabase";
+import { leerLlave, supabase } from "@/lib/supabase";
 import { useLeague } from "@/lib/useLeague";
 import { MeterLlave, QuienApunta } from "@/components/Llave";
 import { usePermiso } from "@/lib/llave";
@@ -60,7 +60,13 @@ export default function Prensa() {
         </div>
       </section>
 
-      <Redaccion league={league} juego={juego} anteriores={todos} onSubido={reload} />
+      <Redaccion
+        league={league}
+        juego={juego}
+        anteriores={todos}
+        onSubido={reload}
+        onAbrir={(id) => setAbierto(todos.find((p) => p.id === id) ?? null)}
+      />
 
       {abierto && (
         <Visor
@@ -107,12 +113,21 @@ function Visor({ periodico, onClose }: { periodico: Periodico; onClose: () => vo
   );
 }
 
-function Redaccion({ league, juego, anteriores, onSubido }: {
+// Los otros números del archivo, sin las fotos en base64, como referencia de tono y estilo
+const sinFotos = (html: string) => html.replace(/data:[a-z/+.-]+;base64,[A-Za-z0-9+/=]+/gi, "data:,");
+
+type Imprenta = { fase: "escribiendo" | "hecho" | "error"; kb: number; msg?: string; id?: string };
+
+function Redaccion({ league, juego, anteriores, onSubido, onAbrir }: {
   league: ReturnType<typeof useLeague>;
   juego: ReturnType<typeof usePartidas>;
   anteriores: Periodico[];
   onSubido: () => void;
+  onAbrir: (id: string) => void;
 }) {
+  const permiso = usePermiso();
+  const [referencias, setReferencias] = useState<string[]>([]);
+  const [imprenta, setImprenta] = useState<Imprenta | null>(null);
   const [fecha, setFecha] = useState("");
   const [hoy, setHoy] = useState("");
   const [now, setNow] = useState(0); // Date.now() no se puede evaluar al prerenderizar
@@ -128,6 +143,8 @@ function Redaccion({ league, juego, anteriores, onSubido }: {
     setHoy(gameToday());
     setNow(Date.now());
     fetch(PLANTILLA).then((r) => r.text()).then(setPlantilla, () => setPlantilla(null));
+    Promise.all(ARCHIVO.filter((p) => p.src && p.src !== PLANTILLA).map((p) => fetch(p.src!).then((r) => r.text())))
+      .then((h) => setReferencias(h.map(sinFotos)), () => setReferencias([]));
   }, []);
 
   const resumenes = useMemo(
@@ -156,10 +173,11 @@ function Redaccion({ league, juego, anteriores, onSubido }: {
     [league.players, league.dias, league.jornadas, league.results, league.adjustments],
   );
 
-  const prompt = useMemo(
+  // Datos del día; la plantilla se añade aparte (el botón de crear la lleva siempre)
+  const datos = useMemo(
     () =>
       elegida
-        ? promptDelDia({
+        ? {
             fecha: elegida,
             players: league.players,
             jornadas: league.jornadas,
@@ -171,11 +189,11 @@ function Redaccion({ league, juego, anteriores, onSubido }: {
             totalJornadas: league.league?.total_jornadas ?? 200,
             anteriores: anteriores.filter((p) => p.fecha < elegida).slice(0, 6),
             notas,
-            plantilla: conPlantilla ? plantilla : null,
-          })
-        : "",
-    [elegida, league, history, resumenes, anteriores, notas, conPlantilla, plantilla],
+          }
+        : null,
+    [elegida, league, history, resumenes, anteriores, notas],
   );
+  const prompt = datos ? promptDelDia({ ...datos, plantilla: conPlantilla ? plantilla : null }) : "";
 
   function cambiarNotas(v: string) {
     setNotas(v);
@@ -183,6 +201,48 @@ function Redaccion({ league, juego, anteriores, onSubido }: {
       localStorage.setItem(notasKey(elegida), v);
     } catch {
       // sin almacenamiento: las notas solo viven mientras la página esté abierta
+    }
+  }
+
+  // Claude escribe el número entero y el servidor lo guarda en la hemeroteca
+  async function crear() {
+    if (!datos || !plantilla || imprenta?.fase === "escribiendo") return;
+    const completo = [
+      promptDelDia({ ...datos, plantilla }),
+      "\n## OTROS NÚMEROS DE EL NAPICOL (referencia de tono, secciones y running gags; el diseño, el de la plantilla)",
+      ...referencias.map((h, i) => `\n### Número anterior ${i + 1}\n\`\`\`html\n${h}\n\`\`\``),
+      "\n## ENCARGO\nEscribe el número de El Napicol de este día. Los comentarios de la mesa, si los hay, inclúyelos. Responde solo con el HTML completo.",
+    ].join("\n");
+    const { data } = await supabase.auth.getSession();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const llave = leerLlave();
+    if (llave) headers["x-lod-llave"] = llave;
+    if (data.session) headers.Authorization = `Bearer ${data.session.access_token}`;
+
+    setImprenta({ fase: "escribiendo", kb: 0 });
+    try {
+      const res = await fetch("/api/periodico", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ prompt: completo, fecha: elegida, dia_number: diaDe(elegida) }),
+      });
+      if (!res.ok || !res.body) throw new Error((await res.text()) || `Error ${res.status}`);
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let texto = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        texto += dec.decode(value, { stream: true });
+        setImprenta({ fase: "escribiendo", kb: Math.round(texto.length / 1024) });
+      }
+      const ok = /<!--LOD-OK:([\w-]+)-->/.exec(texto);
+      const ko = /<!--LOD-ERROR:([\s\S]*?)-->/.exec(texto);
+      if (!ok) throw new Error(ko?.[1] ?? "Se cortó la conexión antes de terminar");
+      setImprenta({ fase: "hecho", kb: Math.round(texto.length / 1024), id: ok[1] });
+      onSubido();
+    } catch (e) {
+      setImprenta({ fase: "error", kb: 0, msg: (e as Error).message });
     }
   }
 
@@ -199,7 +259,7 @@ function Redaccion({ league, juego, anteriores, onSubido }: {
       <div>
         <h2 className="text-lg font-semibold">✍️ Redacción</h2>
         <p className="text-sm text-muted">
-          Elige el día, apunta lo que pasó en la mesa y copia el prompt. Pégalo en Claude, descarga el HTML que te dé y súbelo aquí abajo.
+          Elige el día y dale al botón: El Napicol se escribe solo con los resultados, piscinas y clasificación de ese día, con la misma estética y el mismo tono que los números anteriores.
         </p>
       </div>
 
@@ -218,7 +278,7 @@ function Redaccion({ league, juego, anteriores, onSubido }: {
             </select>
           </label>
           <label className="block text-sm">
-            <span className="text-muted">Lo que pasó (chascarrillos, quejas, apodos nuevos, quién llegó tarde…)</span>
+            <span className="text-muted">💬 Comentarios para el periódico (opcional): chascarrillos, quejas, apodos nuevos, quién llegó tarde…</span>
             <textarea
               value={notas}
               onChange={(e) => cambiarNotas(e.target.value)}
@@ -227,21 +287,47 @@ function Redaccion({ league, juego, anteriores, onSubido }: {
               className="mt-1 w-full"
             />
           </label>
-          <label className="flex items-center gap-2 text-sm text-muted">
-            <input type="checkbox" checked={conPlantilla} onChange={(e) => setConPlantilla(e.target.checked)} />
-            Incluir el último número como plantilla de diseño
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={copiar} disabled={!prompt} className="rounded-full bg-gold px-4 py-2 font-semibold text-felt disabled:opacity-50">
-              {copiado ? "¡Copiado!" : "📋 Copiar prompt"}
-            </button>
-            <button onClick={() => setVerPrompt((v) => !v)} className="rounded-full border border-line px-4 py-2 text-sm text-muted">
-              {verPrompt ? "Ocultar" : "Ver prompt"}
-            </button>
-          </div>
+          <button
+            onClick={crear}
+            disabled={!prompt || !plantilla || !permiso.puede || imprenta?.fase === "escribiendo"}
+            className="w-full rounded-2xl bg-gold py-3.5 text-lg font-bold text-felt disabled:opacity-50"
+          >
+            {imprenta?.fase === "escribiendo" ? "🗞️ Imprimiendo…" : "📰 Crear el periódico del día"}
+          </button>
+          {imprenta?.fase === "escribiendo" && (
+            <p className="animate-pulse text-center text-sm text-muted">
+              Las rotativas están en marcha ({imprenta.kb} KB). Tarda un par de minutos; no cierres esta pantalla.
+            </p>
+          )}
+          {imprenta?.fase === "hecho" && imprenta.id && (
+            <div className="space-y-2 rounded-xl border border-gold/60 bg-gold/10 p-3 text-center">
+              <p className="font-semibold">¡Número publicado en la hemeroteca!</p>
+              <button onClick={() => onAbrir(imprenta.id!)} className="rounded-full bg-gold px-4 py-1.5 font-semibold text-felt">Leerlo</button>
+            </div>
+          )}
+          {imprenta?.fase === "error" && (
+            <p className="rounded-xl border border-red/60 p-3 text-center text-sm text-red">No ha salido: {imprenta.msg}. Prueba otra vez.</p>
+          )}
         </div>
 
-        <Subir fecha={elegida} diaDe={diaDe} onSubido={onSubido} />
+        <details className="rounded-xl border border-dashed border-line p-3 text-sm">
+          <summary className="cursor-pointer text-muted">A mano: copiar el prompt o subir un HTML</summary>
+          <div className="mt-3 space-y-3">
+            <label className="flex items-center gap-2 text-sm text-muted">
+              <input type="checkbox" checked={conPlantilla} onChange={(e) => setConPlantilla(e.target.checked)} />
+              Incluir el último número como plantilla de diseño
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={copiar} disabled={!prompt} className="rounded-full border border-line px-4 py-2 font-semibold text-ink disabled:opacity-50">
+                {copiado ? "¡Copiado!" : "📋 Copiar prompt"}
+              </button>
+              <button onClick={() => setVerPrompt((v) => !v)} className="rounded-full border border-line px-4 py-2 text-sm text-muted">
+                {verPrompt ? "Ocultar" : "Ver prompt"}
+              </button>
+            </div>
+            <Subir fecha={elegida} diaDe={diaDe} onSubido={onSubido} />
+          </div>
+        </details>
       </div>
 
       {verPrompt && (
