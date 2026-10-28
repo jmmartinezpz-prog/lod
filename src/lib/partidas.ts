@@ -9,6 +9,28 @@ import type { JornadaKind } from "./types";
 // Los 5 primeros van a los fijos por orden de mesa; el resto, a wildcards.
 export const PALETTE = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
 
+// Colores para elegir en el modo juego: los 8 de arriba (por defecto) + 10 más, todos con texto blanco legible
+export const GAME_COLORS: { hex: string; name: string }[] = [
+  { hex: "#3987e5", name: "Azul" },
+  { hex: "#d95926", name: "Naranja" },
+  { hex: "#199e70", name: "Turquesa" },
+  { hex: "#c98500", name: "Mostaza" },
+  { hex: "#d55181", name: "Rosa" },
+  { hex: "#008300", name: "Verde" },
+  { hex: "#9085e9", name: "Lavanda" },
+  { hex: "#e66767", name: "Coral" },
+  { hex: "#0d4fa8", name: "Azul marino" },
+  { hex: "#12a4b8", name: "Cian" },
+  { hex: "#6a3fc8", name: "Morado" },
+  { hex: "#b5179e", name: "Magenta" },
+  { hex: "#c62828", name: "Rojo" },
+  { hex: "#6f9e12", name: "Lima" },
+  { hex: "#8d5a2b", name: "Marrón" },
+  { hex: "#5f6b7a", name: "Gris pizarra" },
+  { hex: "#ef7fa6", name: "Chicle" },
+  { hex: "#2b2b2b", name: "Negro" },
+];
+
 export type Partida = { id: string; started_at: string; ended_at: string | null; start_lives: number; kind?: JornadaKind; cancelada?: boolean };
 
 export type PartidaJugador = {

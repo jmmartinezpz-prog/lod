@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Status } from "@/components/Status";
 import { useLeague } from "@/lib/useLeague";
-import { cancelGame, finalStandings, heal, hit, newGame, PALETTE as COLORS, syncGame, type Game, type Seat } from "@/lib/partidas";
+import { cancelGame, finalStandings, GAME_COLORS, heal, hit, newGame, syncGame, type Game, type Seat } from "@/lib/partidas";
 import type { JornadaKind } from "@/lib/types";
 import { playerLabel } from "@/lib/history";
 import { Starred } from "@/components/Status";
@@ -131,6 +131,7 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   const [kind, setKind] = useState<JornadaKind>("normal");
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [colorOf, setColorOf] = useState<Record<string, string>>({});
+  const [painting, setPainting] = useState<string | null>(null); // jugador eligiendo color
   const [wildcards, setWildcards] = useState<{ id: string; name: string }[]>([]);
   const [wildName, setWildName] = useState("");
 
@@ -141,8 +142,14 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
     .sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99) || a.nickname.localeCompare(b.nickname))
     .map((p) => ({ id: p.id, name: playerLabel(p) }));
   const candidates = [...regulars, ...wildcards];
-  const color = (id: string) => colorOf[id] ?? COLORS[candidates.findIndex((c) => c.id === id) % COLORS.length];
   const seated = candidates.filter((c) => !excluded.has(c.id));
+  const assigned = assignColors(
+    [...seated, ...candidates.filter((c) => excluded.has(c.id))].map((c) => c.id),
+    colorOf,
+  );
+  const color = (id: string) => assigned.get(id)!;
+  // Dueño de cada color entre los que juegan (para bloquearlo a los demás)
+  const owner = new Map(seated.map((c) => [color(c.id), c]));
 
   function toggle(id: string) {
     setExcluded((cur) => {
@@ -153,8 +160,14 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
     });
   }
 
-  function cycleColor(id: string) {
-    setColorOf((cur) => ({ ...cur, [id]: COLORS[(COLORS.indexOf(color(id)) + 1) % COLORS.length] }));
+  function pickColor(id: string, hex: string) {
+    // Si lo tenía alguien que no juega, ese se queda con otro libre automáticamente
+    setColorOf((cur) => {
+      const next = { ...cur, [id]: hex };
+      for (const k of Object.keys(next)) if (k !== id && next[k] === hex) delete next[k];
+      return next;
+    });
+    setPainting(null);
   }
 
   function addWildcard() {
@@ -238,7 +251,7 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
                   <FitName name={c.name} max={22} className="w-full [text-shadow:0_1px_4px_rgba(0,0,0,.45)]" />
                 </button>
                 <button
-                  onClick={() => cycleColor(c.id)}
+                  onClick={() => setPainting(c.id)}
                   aria-label="Cambiar color"
                   className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/25 text-sm"
                 >
@@ -257,6 +270,19 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
             );
           })}
         </div>
+
+        {painting && (
+          <ColorPicker
+            name={candidates.find((c) => c.id === painting)?.name ?? ""}
+            current={color(painting)}
+            owner={(hex) => {
+              const o = owner.get(hex);
+              return o && o.id !== painting ? o.name : null;
+            }}
+            onPick={(hex) => pickColor(painting, hex)}
+            onClose={() => setPainting(null)}
+          />
+        )}
 
         <div className="flex gap-2">
           <input
@@ -282,6 +308,72 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
       >
         ¡Empezar! · {seated.length} jugadores
       </button>
+    </div>
+  );
+}
+
+// Reparte colores sin repetir: primero se respetan los elegidos (en orden), el resto coge el primero libre
+function assignColors(ids: string[], chosen: Record<string, string>) {
+  const out = new Map<string, string>();
+  const used = new Set<string>();
+  for (const id of ids) {
+    const want = chosen[id];
+    if (want && !used.has(want)) {
+      out.set(id, want);
+      used.add(want);
+    }
+  }
+  for (const id of ids) {
+    if (out.has(id)) continue;
+    const free = GAME_COLORS.find((c) => !used.has(c.hex))?.hex ?? GAME_COLORS[0].hex;
+    out.set(id, free);
+    used.add(free);
+  }
+  return out;
+}
+
+function ColorPicker({ name, current, owner, onPick, onClose }: {
+  name: string;
+  current: string;
+  owner: (hex: string) => string | null; // quién lo tiene ya (null = libre)
+  onPick: (hex: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <div className="w-full max-w-md space-y-4 rounded-3xl bg-felt p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <p className="text-center text-lg font-semibold">
+          🎨 Color de <Starred name={name} />
+        </p>
+        <div className="grid grid-cols-6 gap-2.5">
+          {GAME_COLORS.map((c) => {
+            const taken = owner(c.hex);
+            const mine = c.hex === current;
+            return (
+              <button
+                key={c.hex}
+                onClick={() => !taken && onPick(c.hex)}
+                disabled={Boolean(taken)}
+                title={taken ? `${c.name} · lo tiene ${taken}` : c.name}
+                aria-label={taken ? `${c.name}, ocupado por ${taken}` : c.name}
+                className={`relative aspect-square rounded-full shadow-md transition active:scale-90 ${
+                  mine ? "ring-4 ring-white ring-offset-2 ring-offset-[var(--felt)]" : ""
+                } ${taken ? "opacity-35" : ""}`}
+                style={{ background: tileBg(c.hex) }}
+              >
+                {mine && <span className="text-lg text-white">✓</span>}
+                {taken && (
+                  <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-white">
+                    {[...taken.replace(/^\P{L}+/u, "")][0]}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-center text-xs text-muted">Los colores con inicial ya los tiene otro jugador</p>
+        <button onClick={onClose} className="w-full rounded-xl border border-line py-3 font-semibold text-muted">Cerrar</button>
+      </div>
     </div>
   );
 }
