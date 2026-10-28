@@ -15,7 +15,7 @@ const SOBRANTES = 8;
 const STORAGE_KEY = "lod-juego";
 
 type Update = (fn: (g: Game | null) => Game | null) => void;
-type Picker = { mode: "lanzar" | "recibir"; seat: Seat };
+type Secado = { thrower: Seat; victim: Seat };
 
 const tileBg = (color: string) =>
   `radial-gradient(circle at 30% 20%, color-mix(in srgb, ${color} 85%, white), ${color} 45%, color-mix(in srgb, ${color} 60%, black))`;
@@ -124,6 +124,7 @@ export default function Juego() {
           zeroGoneBy: saved.zeroGoneBy ?? null,
           kind: saved.kind ?? "normal",
           bustOrder: saved.bustOrder ?? [],
+          secadas: saved.secadas ?? {},
           pending: saved.pending.map((m: Game["pending"][number]) => ({ ...m, kind: m.kind ?? "vida", from_jugador_id: m.from_jugador_id ?? null })),
         });
     } catch {}
@@ -480,7 +481,8 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
   const rows = useRows(game.seats.length);
   const [deltas, setDeltas] = useState<Record<string, number>>({});
   const [dismissed, setDismissed] = useState<string | null>(null);
-  const [picker, setPicker] = useState<Picker | null>(null);
+  const [picker, setPicker] = useState<Seat | null>(null); // quién va a lanzar una piscina
+  const [secado, setSecado] = useState<Secado | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [ordering, setOrdering] = useState(false); // recolocar cartas según cómo estamos sentados
@@ -522,8 +524,11 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
 
   function piscina(thrower: Seat, victim: Seat) {
     setPicker(null);
-    apply(victim.id, hit(game, victim.id, "piscina", thrower.id));
-    flash(`🏊 ${thrower.name} → 💧 ${victim.name}`);
+    const next = hit(game, victim.id, "piscina", thrower.id);
+    apply(victim.id, { ...next, secadas: { ...next.secadas, [victim.id]: (next.secadas[victim.id] ?? 0) + 1 } });
+    setSecado({ thrower, victim });
+    clearTimeout(timers.current.secado);
+    timers.current.secado = setTimeout(() => setSecado(null), 3500);
   }
 
   // Cierra la partida en Supabase; si no se puede, deja elegir entre salir igual o seguir.
@@ -608,27 +613,23 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
 
                   <div className="pointer-events-auto flex gap-[3cqmin]">
                     {!bust && (
-                      <>
-                        <button
-                          onClick={() => setPicker({ mode: "lanzar", seat: s })}
-                          aria-label={`${s.name} lanza una piscina`}
-                          className="flex h-[max(40px,13cqmin)] w-[max(40px,13cqmin)] items-center justify-center rounded-full bg-black/25 text-[max(20px,7cqmin)] active:scale-90"
-                        >
-                          🏊
-                        </button>
-                        {s.playerId && (
-                          <button
-                            onClick={() => setPicker({ mode: "recibir", seat: s })}
-                            aria-label={`${s.name} recibe una piscina`}
-                            className="flex h-[max(40px,13cqmin)] w-[max(40px,13cqmin)] items-center justify-center rounded-full bg-black/25 text-[max(20px,7cqmin)] active:scale-90"
-                          >
-                            💧
-                          </button>
-                        )}
-                      </>
+                      <button
+                        onClick={() => setPicker(s)}
+                        aria-label={`${s.name} lanza una piscina`}
+                        className="flex h-[max(40px,13cqmin)] w-[max(40px,13cqmin)] items-center justify-center rounded-full bg-black/25 text-[max(20px,7cqmin)] active:scale-90"
+                      >
+                        🏊
+                      </button>
                     )}
                   </div>
                 </div>
+
+                {/* Piscinas que le han caído en esta partida */}
+                {(game.secadas[s.id] ?? 0) > 0 && (
+                  <span className="pointer-events-none absolute bottom-[4cqmin] right-[4cqmin] rounded-full bg-black/30 px-[2cqmin] text-[max(12px,5cqmin)] font-semibold leading-snug text-white">
+                    💧{game.secadas[s.id] > 1 && `×${game.secadas[s.id]}`}
+                  </span>
+                )}
 
                 {ordering && (
                   <div
@@ -696,7 +697,21 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
         </div>
       )}
 
-      {picker && <PiscinaPicker picker={picker} seats={game.seats} onPick={piscina} onClose={() => setPicker(null)} />}
+      {picker && <PiscinaPicker seat={picker} seats={game.seats} onPick={piscina} onClose={() => setPicker(null)} />}
+
+      {secado && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm" onClick={() => setSecado(null)}>
+          <div
+            className="animate-splash w-full max-w-sm space-y-2 rounded-3xl p-6 text-center text-white shadow-2xl"
+            style={{ background: tileBg(secado.victim.color), containerType: "inline-size" }}
+          >
+            <p className="text-7xl">🏊💦</p>
+            <FitName name={secado.victim.name} max={14} className="text-[2rem] font-bold [text-shadow:0_2px_10px_rgba(0,0,0,.4)]" />
+            <p className="text-2xl font-extrabold [text-shadow:0_2px_10px_rgba(0,0,0,.4)]">¡Te acaban de secar!</p>
+            <p className="text-sm font-medium opacity-90">Piscina de {secado.thrower.name}</p>
+          </div>
+        </div>
+      )}
 
       {winner && !picker && dismissed !== winner.id && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm">
@@ -719,20 +734,19 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
   );
 }
 
-// Lanzar: el que pulsa elige a quién (solo jugadores de liga). Recibir: el que pulsa elige quién se la lanzó.
-function PiscinaPicker({ picker, seats, onPick, onClose }: {
-  picker: Picker;
+// El que lanza elige a quién (solo jugadores de liga)
+function PiscinaPicker({ seat, seats, onPick, onClose }: {
+  seat: Seat;
   seats: Seat[];
   onPick: (thrower: Seat, victim: Seat) => void;
   onClose: () => void;
 }) {
-  const { mode, seat } = picker;
-  const options = seats.filter((s) => s.id !== seat.id && s.lives >= 0 && (mode === "recibir" || s.playerId));
+  const options = seats.filter((s) => s.id !== seat.id && s.lives >= 0 && s.playerId);
   return (
     <div className="absolute inset-0 z-20 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center" onClick={onClose}>
       <div className="w-full max-w-md space-y-3 rounded-3xl bg-felt p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <p className="text-center text-lg font-semibold text-ink">
-          {mode === "lanzar" ? `🏊 ¿A quién le lanza la piscina ${seat.name}?` : `💧 ¿Quién le ha lanzado la piscina a ${seat.name}?`}
+          🏊 ¿A quién le lanza la piscina {seat.name}?
         </p>
         {options.length === 0 ? (
           <p className="py-4 text-center text-muted">No hay a quién</p>
@@ -741,7 +755,7 @@ function PiscinaPicker({ picker, seats, onPick, onClose }: {
             {options.map((o) => (
               <button
                 key={o.id}
-                onClick={() => (mode === "lanzar" ? onPick(seat, o) : onPick(o, seat))}
+                onClick={() => onPick(seat, o)}
                 className="flex h-20 items-center rounded-2xl px-3 text-white shadow-lg active:scale-95"
                 style={{ background: tileBg(o.color), containerType: "inline-size" }}
               >

@@ -66,6 +66,7 @@ export type Game = {
   pending: Movimiento[]; // movimientos aún sin subir
   zeroGoneBy: string | null; // quién hizo BUST siendo el único en vida cero (desde entonces no hay vida cero)
   bustOrder: string[]; // ids en el orden en que han reventado
+  secadas: Record<string, number>; // piscinas recibidas en esta partida, por asiento
 };
 
 // crypto.randomUUID solo existe en https; en la red local (http) hace falta el plan B.
@@ -90,6 +91,7 @@ export function newGame(start: number, kind: JornadaKind, seats: Omit<Seat, "id"
     pending: [],
     zeroGoneBy: null,
     bustOrder: [],
+    secadas: {},
   };
 }
 
