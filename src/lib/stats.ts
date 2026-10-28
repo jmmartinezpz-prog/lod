@@ -350,8 +350,11 @@ export function leagueRecords(h: LeagueHistory): Record[] {
   top((l) => l.diasLider, "📅", "Más días como líder", (n) => `${d(n)} de ${h.dias}`);
   top((l) => l.jornadasLider, "👑", "Más jornadas como líder", (n) => `${j(n)} de ${h.jornadas}`);
   top((l) => l.mejorRacha, "⛓️", "Racha más larga de líder", (n) => `${j(n)} seguidas`);
-  const ventaja = all.filter((l) => l.maxVentaja).toSorted((a, b) => b.maxVentaja!.pts - a.maxVentaja!.pts)[0];
-  if (ventaja) out.push({ icon: "🚀", title: "Mayor ventaja siendo líder", who: name.get(ventaja.key)!, value: `+${ventaja.maxVentaja!.pts} pts en J${ventaja.maxVentaja!.jornada}` });
+  const conVentaja = all.filter((l) => l.maxVentaja);
+  const ventaja = Math.max(0, ...conVentaja.map((l) => l.maxVentaja!.pts));
+  const lideres = conVentaja.filter((l) => l.maxVentaja!.pts === ventaja);
+  if (ventaja > 0)
+    out.push({ icon: "🚀", title: "Mayor ventaja siendo líder", who: names(lideres), value: `+${ventaja} pts en ${lideres.map((l) => `J${l.maxVentaja!.jornada}`).join(" y ")}` });
   top((l) => l.diasUltimo, "🏮", "Farolillo rojo: más días último", (n) => d(n));
   top((l) => l.jornadasUltimo, "🐢", "Más jornadas en último puesto", (n) => j(n));
   const nunca = all.filter((l) => l.jornadasLider === 0 && l.mejorPuesto !== null);
@@ -363,11 +366,21 @@ export function leagueRecords(h: LeagueHistory): Record[] {
 
 export function records(stats: PlayerStats[], resumenes: Resumen[]): Record[] {
   const out: Record[] = [];
+  // Empates: salen todos los nombres
   const top = (pick: (s: PlayerStats) => number, icon: string, title: string, unit: (n: number) => string) => {
-    const best = stats.toSorted((a, b) => pick(b) - pick(a))[0];
-    if (best && pick(best) > 0) out.push({ icon, title, who: best.name, value: unit(pick(best)) });
+    const max = Math.max(0, ...stats.map(pick));
+    if (max > 0) out.push({ icon, title, who: stats.filter((s) => pick(s) === max).map((s) => s.name).join(" y "), value: unit(max) });
   };
-  const fmtMin = (ms: number) => `${Math.max(1, Math.round(ms / 60000))} min`;
+  // Récords de una partida concreta: todas las que igualan la marca; si es el mismo, "×2"
+  const marca = (rs: Resumen[], valor: (r: Resumen) => number, mejor: "max" | "min", quien: (r: Resumen) => string) => {
+    if (!rs.length) return null;
+    const vs = rs.map(valor);
+    const v = mejor === "max" ? Math.max(...vs) : Math.min(...vs);
+    const veces = new Map<string, number>();
+    for (const r of rs) if (valor(r) === v) veces.set(quien(r), (veces.get(quien(r)) ?? 0) + 1);
+    return { v, who: [...veces].map(([n, k]) => (k > 1 ? `${n} (×${k})` : n)).join(" y ") };
+  };
+  const minutos = (r: Resumen) => Math.max(1, Math.round((r.endAt - r.startAt) / 60000));
 
   top((s) => s.bestStreak, "🔥", "Mejor racha de victorias", (n) => (n === 1 ? "1 victoria" : `${n} seguidas`));
   top((s) => s.wins, "🏆", "Más partidas ganadas", (n) => `${n}`);
@@ -385,22 +398,21 @@ export function records(stats: PlayerStats[], resumenes: Resumen[]): Record[] {
   top((s) => s.porLaMinima, "😅", "Más victorias por la mínima (desde el 28/10)", (n) => `${n} con 1 vida o en vida cero`);
 
   const won = resumenes.filter((r) => r.winner);
+  const ganador = (r: Resumen) => r.winner!.name;
   // Remontada: el ganador llegó a estar por debajo de con lo que acabó
-  const comeback = won
-    .filter((r) => r.winner!.minLives < r.winner!.lives)
-    .toSorted((a, b) => a.winner!.minLives - b.winner!.minLives)[0];
-  if (comeback)
-    out.push({ icon: "🧟", title: "Mayor remontada", who: comeback.winner!.name, value: `ganó tras quedarse en ${plural(comeback.winner!.minLives)}` });
-  const paliza = won.toSorted((a, b) => b.winner!.lives - a.winner!.lives)[0];
-  if (paliza) out.push({ icon: "💪", title: "Victoria más holgada", who: paliza.winner!.name, value: `acabó con ${plural(paliza.winner!.lives)}` });
-  const apurada = won.toSorted((a, b) => a.winner!.lives - b.winner!.lives)[0];
-  if (apurada && apurada !== paliza)
-    out.push({ icon: "😰", title: "Victoria más apurada", who: apurada.winner!.name, value: apurada.winner!.lives <= 0 ? "ganó en vida cero" : `acabó con ${plural(apurada.winner!.lives)}` });
+  const comeback = marca(won.filter((r) => r.winner!.minLives < r.winner!.lives), (r) => r.winner!.minLives, "min", ganador);
+  if (comeback) out.push({ icon: "🧟", title: "Mayor remontada", who: comeback.who, value: `ganó tras quedarse en ${plural(comeback.v)}` });
+  const paliza = marca(won, (r) => r.winner!.lives, "max", ganador);
+  if (paliza) out.push({ icon: "💪", title: "Victoria más holgada", who: paliza.who, value: `acabó con ${plural(paliza.v)}` });
+  const apurada = marca(won, (r) => Math.max(0, r.winner!.lives), "min", ganador);
+  if (apurada && paliza && apurada.v !== paliza.v)
+    out.push({ icon: "😰", title: "Victoria más apurada", who: apurada.who, value: apurada.v <= 0 ? "ganó en vida cero" : `acabó con ${plural(apurada.v)}` });
   const done = resumenes.filter((r) => !r.live);
-  const long = done.toSorted((a, b) => b.endAt - b.startAt - (a.endAt - a.startAt))[0];
-  if (long) out.push({ icon: "⏳", title: "Partida más larga", who: dayOf(long.partida.started_at), value: fmtMin(long.endAt - long.startAt) });
-  const short = done.toSorted((a, b) => a.endAt - a.startAt - (b.endAt - b.startAt))[0];
-  if (short && short !== long) out.push({ icon: "⚡", title: "Partida más rápida", who: dayOf(short.partida.started_at), value: fmtMin(short.endAt - short.startAt) });
+  const dia = (r: Resumen) => dayOf(r.partida.started_at);
+  const long = marca(done, minutos, "max", dia);
+  if (long) out.push({ icon: "⏳", title: "Partida más larga", who: long.who, value: `${long.v} min` });
+  const short = marca(done, minutos, "min", dia);
+  if (short && long && short.v !== long.v) out.push({ icon: "⚡", title: "Partida más rápida", who: short.who, value: `${short.v} min` });
   return out;
 }
 
