@@ -3,26 +3,15 @@
 import { useState } from "react";
 import { useLeague } from "@/lib/useLeague";
 import { Status, PlayerName } from "@/components/Status";
-import { usePermiso } from "@/lib/llave";
-import { supabase } from "@/lib/supabase";
 import type { Jornada } from "@/lib/types";
 
 const ICON = { piscina: "🏊", autopiscina: "🤦", historia: "📜" } as const;
 
 export default function Jornadas() {
   const { dias, jornadas, results, players, adjustments, events, loading, error } = useLeague();
-  const { admin } = usePermiso();
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const byId = new Map(players.map((p) => [p.id, p]));
   const name = (id: string | null) => (id ? byId.get(id)?.nickname ?? "?" : "?");
-
-  async function removeJornada(id: string, n: number) {
-    if (!confirm(`¿Borrar la J${n} y todos sus resultados?`)) return;
-    await supabase.from("jornadas").delete().eq("id", id);
-  }
-  async function setDate(diaId: string, value: string) {
-    await supabase.from("dias").update({ played_on: value || null }).eq("id", diaId);
-  }
 
   // Agrupar jornadas por día (las que no tienen día van a "Sin día")
   const groups = [
@@ -84,13 +73,6 @@ export default function Jornadas() {
               ))}
             </div>
 
-            {admin && dia && (
-              <label className="flex items-center gap-2 px-4 pb-3 text-xs text-muted">
-                Fecha del día
-                <input type="date" className="!w-auto !py-1" defaultValue={dia.played_on ?? ""} onBlur={(e) => setDate(dia.id, e.target.value)} />
-              </label>
-            )}
-
             {isOpen && (
               <div className="space-y-3 border-t border-line p-4">
                 {sorted.map((j) => {
@@ -137,11 +119,6 @@ export default function Jornadas() {
                         </ul>
                       )}
                       {j.notes && <p className="mt-2 text-xs italic text-muted">{j.notes}</p>}
-                      {admin && (
-                        <button onClick={() => removeJornada(j.id, j.number)} className="mt-2 text-xs text-red">
-                          Borrar jornada
-                        </button>
-                      )}
                     </article>
                   );
                 })}

@@ -27,7 +27,6 @@ export default function Prensa() {
   const league = useLeague();
   const juego = usePartidas();
   const { todos, error: prensaError, reload } = usePeriodicos();
-  const permiso = usePermiso();
   const [abierto, setAbierto] = useState<Periodico | null>(null);
 
   return (
@@ -66,24 +65,14 @@ export default function Prensa() {
       {abierto && (
         <Visor
           periodico={abierto}
-          puedeBorrar={permiso.puede && !abierto.src}
           onClose={() => setAbierto(null)}
-          onBorrado={() => {
-            setAbierto(null);
-            reload();
-          }}
         />
       )}
     </div>
   );
 }
 
-function Visor({ periodico, puedeBorrar, onClose, onBorrado }: {
-  periodico: Periodico;
-  puedeBorrar: boolean;
-  onClose: () => void;
-  onBorrado: () => void;
-}) {
+function Visor({ periodico, onClose }: { periodico: Periodico; onClose: () => void }) {
   const [html, setHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,19 +87,11 @@ function Visor({ periodico, puedeBorrar, onClose, onBorrado }: {
     window.open(URL.createObjectURL(new Blob([html], { type: "text/html" })), "_blank");
   }
 
-  async function borrar() {
-    if (!confirm(`¿Borrar "${periodico.titulo}"?`)) return;
-    const { error } = await supabase.from("periodicos").delete().eq("id", periodico.id);
-    if (error) setError(error.message);
-    else onBorrado();
-  }
-
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-felt" style={{ paddingTop: "env(safe-area-inset-top)" }}>
       <div className="flex items-center gap-2 border-b border-line px-3 py-2">
         <p className="mr-auto truncate text-sm font-semibold">{periodico.titulo}</p>
         <button onClick={abrirFuera} className="rounded-full border border-line px-3 py-1 text-xs text-muted">Abrir aparte</button>
-        {puedeBorrar && <button onClick={borrar} className="rounded-full border border-red/50 px-3 py-1 text-xs text-red">Borrar</button>}
         <button onClick={onClose} className="rounded-full bg-gold px-3 py-1 text-sm font-semibold text-felt">Cerrar</button>
       </div>
       {error ? (

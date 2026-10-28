@@ -322,16 +322,17 @@ export default function Estadisticas() {
               </select>
               <LivesChart r={shown} />
               <Eliminaciones r={shown} />
-              {permiso.puede && <button
+              {/* Solo las que se quedaron a medias: una partida terminada ya es parte de la liga */}
+              {permiso.puede && !shown.partida.ended_at && !shown.live && <button
                 onClick={async () => {
-                  if (!confirm("¿Anular esta partida?\n\nDesaparecerá de todas las estadísticas y se borrará su jornada de liga (para pruebas o errores).")) return;
+                  if (!confirm("¿Anular esta partida?\n\nSe quedó a medias: desaparecerá de las estadísticas.")) return;
                   const error = await cancelPartida(shown.partida.id);
                   if (error) alert(`No se ha podido anular: ${error}`);
                   else setSelected(null);
                 }}
                 className="text-xs text-muted underline"
               >
-                🗑 Anular esta partida (era una prueba o un error)
+                🗑 Anular esta partida (se quedó a medias)
               </button>}
             </div>
           )}
