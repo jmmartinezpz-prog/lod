@@ -6,6 +6,7 @@ import { LivesChart } from "@/components/LivesChart";
 import { ProgressChart } from "@/components/ProgressChart";
 import { historyIn, leagueHistory, regularsOf } from "@/lib/history";
 import { useLeague } from "@/lib/useLeague";
+import { usePermiso } from "@/lib/llave";
 import { cancelPartida, usePartidas } from "@/lib/partidas";
 import { allSplashes, dayOf, finales, type Final, inRange, leagueRecords, playerStats, records, resumir, type PlayerStats, type Range, type Resumen } from "@/lib/stats";
 
@@ -51,6 +52,7 @@ export default function Estadisticas() {
   const league = useLeague();
   const juego = usePartidas();
   const now = useNow(30_000);
+  const permiso = usePermiso();
   const [preset, setPreset] = useState<Preset>("todo");
   const [custom, setCustom] = useState<Range>({ from: null, to: null });
   const [selected, setSelected] = useState<string | null>(null);
@@ -233,7 +235,7 @@ export default function Estadisticas() {
             </select>
             <LivesChart r={shown} />
             <Eliminaciones r={shown} />
-            <button
+            {permiso.puede && <button
               onClick={async () => {
                 if (!confirm("¿Anular esta partida?\n\nDesaparecerá de todas las estadísticas (para pruebas o errores).")) return;
                 const error = await cancelPartida(shown.partida.id);
@@ -243,7 +245,7 @@ export default function Estadisticas() {
               className="text-xs text-muted underline"
             >
               🗑 Anular esta partida (era una prueba o un error)
-            </button>
+            </button>}
           </div>
         )}
       </Card>

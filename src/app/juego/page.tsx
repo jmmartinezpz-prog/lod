@@ -7,6 +7,8 @@ import { cancelGame, finalStandings, GAME_COLORS, heal, hit, newGame, syncGame, 
 import type { JornadaKind } from "@/lib/types";
 import { playerLabel } from "@/lib/history";
 import { Starred } from "@/components/Status";
+import { MeterLlave, QuienApunta } from "@/components/Llave";
+import { usePermiso } from "@/lib/llave";
 
 const NORMAL = 6;
 const SOBRANTES = 8;
@@ -192,6 +194,7 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   const [wildcards, setWildcards] = useState<{ id: string; name: string }[]>([]);
   const [wildName, setWildName] = useState("");
   const [orden, setOrden] = useState<string[]>([]);
+  const permiso = usePermiso();
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrden(readOrder());
@@ -383,9 +386,11 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
         </div>
       </section>
 
+      <MeterLlave permiso={permiso} que="apuntar partidas" />
+      <QuienApunta permiso={permiso} />
       <button
         onClick={begin}
-        disabled={seated.length < 2}
+        disabled={seated.length < 2 || !permiso.puede}
         className="w-full rounded-2xl bg-gold py-4 text-lg font-bold text-felt shadow-lg active:scale-[.99] disabled:opacity-40"
       >
         ¡Empezar! · {seated.length} jugadores

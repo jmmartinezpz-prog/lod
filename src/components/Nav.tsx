@@ -16,6 +16,7 @@ const tabs = [
 const adminLinks = [
   { href: "/registrar", label: "+ Jornada" },
   { href: "/extras", label: "Extras" },
+  { href: "/seguridad", label: "🛡" },
 ];
 
 export default function Nav() {

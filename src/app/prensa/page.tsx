@@ -9,6 +9,8 @@ import { dayOf, gameToday, resumir } from "@/lib/stats";
 import { supabase } from "@/lib/supabase";
 import { useLeague } from "@/lib/useLeague";
 import { useSession } from "@/lib/useSession";
+import { MeterLlave, QuienApunta } from "@/components/Llave";
+import { usePermiso } from "@/lib/llave";
 
 const fechaCorta = (d: string) =>
   new Date(`${d}T12:00:00`).toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
@@ -277,6 +279,7 @@ function Subir({ fecha, diaDe, onSubido }: { fecha: string; diaDe: (f: string) =
   const [cuando, setCuando] = useState("");
   const [estado, setEstado] = useState<string | null>(null);
   const [subiendo, setSubiendo] = useState(false);
+  const permiso = usePermiso();
 
   async function elegir(f: File | undefined) {
     if (!f) return;
@@ -311,7 +314,9 @@ function Subir({ fecha, diaDe, onSubido }: { fecha: string; diaDe: (f: string) =
   return (
     <div className="space-y-3 rounded-xl border border-dashed border-line p-3">
       <p className="text-sm font-semibold">📤 Subir periódico</p>
-      <input type="file" accept=".html,.htm,text/html" onChange={(e) => elegir(e.target.files?.[0])} className="w-full text-sm" />
+      <MeterLlave permiso={permiso} que="subir periódicos" />
+      <QuienApunta permiso={permiso} />
+      <input type="file" disabled={!permiso.puede} accept=".html,.htm,text/html" onChange={(e) => elegir(e.target.files?.[0])} className="w-full text-sm" />
       {archivo && (
         <>
           <label className="block text-sm">
