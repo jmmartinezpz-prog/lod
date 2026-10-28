@@ -25,8 +25,14 @@ export default function Nav() {
     <>
       <header className="sticky top-0 z-10 border-b border-line bg-felt/90 backdrop-blur" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <div className="flex items-center gap-2 px-4 py-3 sm:px-6 lg:px-10">
-          <Link href="/" className="mr-auto text-lg font-bold tracking-tight">
-            🎲 <span className="text-gold">LOD</span>
+          {/* Wheely Fog patrocina la LOD */}
+          <Link href="/" className="mr-auto flex items-center gap-2 text-lg font-bold tracking-tight">
+            <span>
+              🎲 <span className="text-gold">LOD</span>
+            </span>
+            <span className="text-xs font-normal text-muted">×</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/wheely-fog.png" alt="Wheely Fog" width={480} height={226} className="h-7 w-auto" />
           </Link>
           {session &&
             adminLinks.map((l) => (
