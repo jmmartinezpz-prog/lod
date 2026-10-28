@@ -6,7 +6,7 @@ import { LivesChart } from "@/components/LivesChart";
 import { ProgressChart } from "@/components/ProgressChart";
 import { historyIn, leagueHistory, regularsOf } from "@/lib/history";
 import { useLeague } from "@/lib/useLeague";
-import { usePartidas } from "@/lib/partidas";
+import { cancelPartida, usePartidas } from "@/lib/partidas";
 import { allSplashes, dayOf, inRange, leagueRecords, playerStats, records, resumir, type PlayerStats, type Range, type Resumen } from "@/lib/stats";
 
 type Preset = "todo" | "hoy" | "7" | "30" | "mes" | "fechas";
@@ -220,6 +220,17 @@ export default function Estadisticas() {
             </select>
             <LivesChart r={shown} />
             <Eliminaciones r={shown} />
+            <button
+              onClick={async () => {
+                if (!confirm("¿Anular esta partida?\n\nDesaparecerá de todas las estadísticas (para pruebas o errores).")) return;
+                const error = await cancelPartida(shown.partida.id);
+                if (error) alert(`No se ha podido anular: ${error}`);
+                else setSelected(null);
+              }}
+              className="text-xs text-muted underline"
+            >
+              🗑 Anular esta partida (era una prueba o un error)
+            </button>
           </div>
         )}
       </Card>

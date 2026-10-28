@@ -9,7 +9,7 @@ import type { JornadaKind } from "./types";
 // Los 5 primeros van a los fijos por orden de mesa; el resto, a wildcards.
 export const PALETTE = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
 
-export type Partida = { id: string; started_at: string; ended_at: string | null; start_lives: number; kind?: JornadaKind };
+export type Partida = { id: string; started_at: string; ended_at: string | null; start_lives: number; kind?: JornadaKind; cancelada?: boolean };
 
 export type PartidaJugador = {
   id: string;
@@ -120,6 +120,22 @@ export function finalStandings(g: Game) {
 }
 
 // Sube lo que falte. Todo son upserts con ids del móvil, así que repetir es inocuo.
+// Marca una partida como cancelada: no se borra, pero las estadísticas la ignoran.
+export async function cancelPartida(id: string): Promise<string | null> {
+  if (!supabaseConfigured) return null;
+  const { error } = await supabase.from("partidas").update({ cancelada: true }).eq("id", id);
+  return error?.message ?? null;
+}
+
+// Cancela la partida en curso. Si nunca llegó a subirse no hay nada que marcar.
+export async function cancelGame(g: Game): Promise<string | null> {
+  if (!supabaseConfigured || (!g.synced && g.pending.length === 0)) return null;
+  const { error } = await supabase
+    .from("partidas")
+    .upsert({ id: g.id, started_at: g.startedAt, ended_at: new Date().toISOString(), start_lives: g.start, kind: g.kind, cancelada: true });
+  return error?.message ?? null;
+}
+
 export async function syncGame(g: Game): Promise<{ header: boolean; sent: string[]; error: string | null }> {
   if (!supabaseConfigured) return { header: false, sent: [], error: "Supabase no configurado" };
   if (!g.synced) {

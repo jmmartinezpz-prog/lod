@@ -68,7 +68,7 @@ export function resumir(
   const seatsBy = groupBy(jugadores, (j) => j.partida_id);
 
   return partidas
-    .filter((p) => movesBy.has(p.id) && seatsBy.has(p.id))
+    .filter((p) => !p.cancelada && movesBy.has(p.id) && seatsBy.has(p.id))
     .map((partida) => {
       const moves = movesBy.get(partida.id)!.toSorted((a, b) => a.created_at.localeCompare(b.created_at));
       const last = Date.parse(moves.at(-1)!.created_at);

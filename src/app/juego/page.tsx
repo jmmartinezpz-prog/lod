@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Status } from "@/components/Status";
 import { useLeague } from "@/lib/useLeague";
-import { finalStandings, heal, hit, newGame, PALETTE as COLORS, syncGame, type Game, type Seat } from "@/lib/partidas";
+import { cancelGame, finalStandings, heal, hit, newGame, PALETTE as COLORS, syncGame, type Game, type Seat } from "@/lib/partidas";
 import type { JornadaKind } from "@/lib/types";
 import { playerLabel } from "@/lib/history";
 import { Starred } from "@/components/Status";
@@ -292,6 +292,7 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [picker, setPicker] = useState<Picker | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [menu, setMenu] = useState(false);
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const sync = useSync(game, update);
   useWakeLock();
@@ -340,8 +341,17 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
   }
 
   function exit() {
-    if (!confirm("¿Terminar y guardar la partida?")) return;
+    setMenu(false);
     finish(() => null);
+  }
+
+  // Para pruebas o errores: se cierra sin resumen y no cuenta en las estadísticas
+  async function cancel() {
+    if (!confirm("¿Cancelar la partida?\n\nNo contará para nada en las estadísticas.")) return;
+    const error = await cancelGame(game);
+    if (error && !confirm(`No se ha podido marcar como cancelada (${error}).\n\n¿Salir igual?`)) return;
+    setMenu(false);
+    update(() => null);
   }
 
   const alive = game.seats.filter((s) => s.lives >= 0);
@@ -440,13 +450,30 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
             <span className="px-1 text-xs text-white/70">{sync.pending ? `⏳ ${sync.pending}` : "☁️ ✓"}</span>
           )}
           <button onClick={rematch} aria-label="Nueva partida" className="h-9 w-9 rounded-full text-lg">↺</button>
-          <button onClick={exit} aria-label="Terminar" className="h-9 w-9 rounded-full text-lg">✕</button>
+          <button onClick={() => setMenu(true)} aria-label="Terminar o cancelar" className="h-9 w-9 rounded-full text-lg">✕</button>
         </div>
       </div>
 
       {toast && (
         <div className="pointer-events-none absolute inset-x-0 bottom-[12%] z-20 flex justify-center px-4">
           <p className="rounded-2xl bg-black/80 px-4 py-2.5 text-center text-base font-semibold text-white shadow-xl backdrop-blur">{toast}</p>
+        </div>
+      )}
+
+      {menu && (
+        <div className="absolute inset-0 z-30 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center" onClick={() => setMenu(false)}>
+          <div className="w-full max-w-sm space-y-2 rounded-3xl bg-felt p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="pb-1 text-center text-lg font-semibold text-ink">¿Qué hacemos con la partida?</p>
+            <button onClick={exit} className="w-full rounded-2xl bg-gold py-3.5 font-bold text-felt">
+              🏁 Terminar y guardar
+              <span className="block text-xs font-medium opacity-80">Cuenta en las estadísticas y sale el resumen</span>
+            </button>
+            <button onClick={cancel} className="w-full rounded-2xl border border-red/60 py-3.5 font-semibold text-red">
+              🗑 Cancelar partida
+              <span className="block text-xs font-medium opacity-80">Era una prueba o un error: no cuenta para nada</span>
+            </button>
+            <button onClick={() => setMenu(false)} className="w-full py-2 text-sm text-muted">Seguir jugando</button>
+          </div>
         </div>
       )}
 
@@ -464,6 +491,7 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
               <button onClick={rematch} className="rounded-xl bg-white py-3 font-bold text-black">↺ Otra partida</button>
               <button onClick={exit} className="rounded-xl bg-black/30 py-3 font-semibold">Terminar</button>
               <button onClick={() => setDismissed(winner.id)} className="py-1 text-sm text-white/80">Seguir jugando</button>
+              <button onClick={cancel} className="text-xs text-white/60 underline">🗑 Cancelar partida (no cuenta)</button>
             </div>
           </div>
         </div>
