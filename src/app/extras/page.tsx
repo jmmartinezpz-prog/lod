@@ -26,6 +26,7 @@ function Panel() {
   const [kind, setKind] = useState<Kind>("sancion");
   const [value, setValue] = useState(1);
   const [reason, setReason] = useState("");
+  const [target, setTarget] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
 
   const isAdjustment = kind === "sancion" || kind === "bonus" || kind === "alta";
@@ -39,7 +40,10 @@ function Panel() {
           player_id, kind, reason: reason || null,
           points: kind === "sancion" ? -Math.abs(value) : Math.abs(value),
         })
-      : await supabase.from("events").insert({ player_id, kind, value, description: reason || null });
+      : await supabase.from("events").insert({
+          player_id, kind, value, description: reason || null,
+          target_player_id: kind === "piscina" ? target || players.find((p) => p.id !== player_id)?.id : kind === "autopiscina" ? player_id : null,
+        });
     setMsg(error ? error.message : "Guardado ✔");
     if (!error) setReason("");
   }
@@ -53,7 +57,10 @@ function Panel() {
 
   const log = [
     ...adjustments.map((a) => ({ table: "adjustments" as const, id: a.id, player: a.player_id, kind: a.kind, v: a.points, text: a.reason, at: a.created_at })),
-    ...events.map((e) => ({ table: "events" as const, id: e.id, player: e.player_id, kind: e.kind, v: e.value, text: e.description, at: e.created_at })),
+    ...events.map((e) => ({
+      table: "events" as const, id: e.id, player: e.player_id, kind: e.kind, v: e.value, at: e.created_at,
+      text: [e.kind === "piscina" && e.target_player_id ? `→ ${byId.get(e.target_player_id)}` : null, e.description].filter(Boolean).join(" "),
+    })),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
   return (
@@ -71,6 +78,12 @@ function Panel() {
           </select>
           <input type="number" min={1} value={value} onChange={(e) => setValue(Number(e.target.value))} />
         </div>
+        {kind === "piscina" && (
+          <select value={target} onChange={(e) => setTarget(e.target.value)}>
+            <option value="">Piscina a…</option>
+            {players.filter((p) => p.id !== (player || players[0]?.id)).map((p) => <option key={p.id} value={p.id}>{p.nickname}</option>)}
+          </select>
+        )}
         <p className="text-xs text-muted">
           {isAdjustment ? "Suma o resta puntos de liga." : "No cambia los puntos de liga, solo el palmarés."}
         </p>

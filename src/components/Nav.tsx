@@ -24,7 +24,7 @@ export default function Nav() {
   return (
     <>
       <header className="sticky top-0 z-10 border-b border-line bg-felt/90 backdrop-blur" style={{ paddingTop: "env(safe-area-inset-top)" }}>
-        <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
+        <div className="flex items-center gap-2 px-4 py-3 sm:px-6 lg:px-10">
           <Link href="/" className="mr-auto text-lg font-bold tracking-tight">
             🎲 <span className="text-gold">LOD</span>
           </Link>
@@ -56,7 +56,7 @@ export default function Nav() {
         className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-felt/95 backdrop-blur"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="mx-auto grid max-w-3xl grid-cols-4">
+        <div className="mx-auto grid max-w-xl grid-cols-4">
           {tabs.map((t) => {
             const on = path === t.href;
             return (

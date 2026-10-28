@@ -111,15 +111,12 @@ function Summary({ game, onClose }: { game: Game; onClose: () => void }) {
                 </span>
               </span>
               <span className="text-right [text-shadow:0_1px_4px_rgba(0,0,0,.4)]">
-                <span className="tabular block text-3xl font-bold leading-none">{r.points ?? "–"}</span>
+                <span className="tabular block text-3xl font-bold leading-none">{r.points}</span>
                 <span className="text-xs opacity-85">puntos</span>
               </span>
             </li>
           ))}
         </ol>
-        {rows[0]?.points === null && (
-          <p className="text-center text-xs text-muted">No hay tabla de puntos para {game.seats.length} jugadores.</p>
-        )}
         <button onClick={onClose} className="w-full rounded-2xl bg-gold py-3.5 text-lg font-bold text-felt">Cerrar</button>
       </div>
     </div>

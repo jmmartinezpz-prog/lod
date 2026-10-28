@@ -44,13 +44,18 @@ function groupBy<T>(xs: T[], key: (x: T) => string) {
   return out;
 }
 
-export const keyOf =(j: { player_id: string | null; name: string }) => j.player_id ?? `wc:${j.name}`;
+// Todo el que no es jugador fijo de la liga cuenta como "Wildcard" en las estadísticas
+export const WILDCARD = "wildcard";
+export const WILDCARD_NAME = "🃏 Wildcard";
+export const keyOf = (j: { player_id: string | null }, regular?: Set<string>) =>
+  j.player_id && (!regular || regular.has(j.player_id)) ? j.player_id : WILDCARD;
 
 export function resumir(
   partidas: Partida[],
   jugadores: PartidaJugador[],
   movimientos: Movimiento[],
   now: number,
+  regular?: Set<string>,
 ): Resumen[] {
   const movesBy = groupBy(movimientos, (m) => m.partida_id);
   const seatsBy = groupBy(jugadores, (j) => j.partida_id);
@@ -69,7 +74,7 @@ export function resumir(
         const lives = mine.at(-1)?.lives_after ?? partida.start_lives;
         return {
           ...j,
-          key: keyOf(j),
+          key: keyOf(j, regular),
           lives,
           minLives: Math.min(partida.start_lives, ...mine.map((m) => Math.max(0, m.lives_after))),
           lost: mine.reduce((s, m) => s + Math.max(0, -m.delta), 0),
@@ -140,9 +145,14 @@ export type PlayerStats = {
   jornadaStreak: number;
   bestJornadaStreak: number;
   // palmarés
-  piscinas: number;
+  piscinas: number; // entregadas en la liga (jornadas)
+  recibidas: number; // recibidas en la liga (jornadas)
   autopiscinas: number;
   historia: number;
+  // piscinas totales (liga + modo juego)
+  pisDadas: number;
+  pisRecibidas: number;
+  pisBalance: number; // dadas - recibidas
 };
 
 export function playerStats(opts: {
@@ -159,7 +169,6 @@ export function playerStats(opts: {
     .filter((p) => p.active && !p.is_wildcard)
     .sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99) || a.nickname.localeCompare(b.nickname));
   const label = (p: Player) => `${p.emoji ? `${p.emoji} ` : ""}${p.nickname}`;
-  const byId = new Map(players.map((p) => [p.id, p]));
 
   const jornadaById = new Map(jornadas.filter((j) => inRange(j.played_on, range)).map((j) => [j.id, j]));
   const jornadaDay = new Map(jornadas.map((j) => [j.id, j.played_on]));
@@ -172,21 +181,23 @@ export function playerStats(opts: {
 
   const keys = new Map<string, { name: string; color: string }>();
   regulars.forEach((p, i) => keys.set(p.id, { name: label(p), color: PALETTE[i % PALETTE.length] }));
-  const extra = (key: string, name: string) => {
-    if (!keys.has(key)) keys.set(key, { name, color: "var(--muted)" });
-  };
-  for (const r of [...resumenes, ...live]) for (const s of r.seats) extra(s.key, byId.get(s.key) ? label(byId.get(s.key)!) : s.name);
-  for (const x of [...myResults, ...myEvents]) {
-    const p = byId.get(x.player_id);
-    if (p) extra(p.id, label(p));
-  }
+  const group = (id: string | null) => (id && keys.has(id) ? id : WILDCARD);
+  const anyWild =
+    [...resumenes, ...live].some((r) => r.seats.some((s) => s.key === WILDCARD)) ||
+    [...myResults, ...myEvents].some((x) => group(x.player_id) === WILDCARD);
+  if (anyWild) keys.set(WILDCARD, { name: WILDCARD_NAME, color: "var(--muted)" });
 
   return [...keys].map(([key, { name, color }]) => {
     const seats = resumenes.flatMap((r) => r.seats.filter((s) => s.key === key).map((s) => ({ s, n: r.seats.length, id: r.partida.id })));
     const liveSeats = live.flatMap((r) => r.seats.filter((s) => s.key === key).map((s) => ({ s })));
-    const res = myResults.filter((r) => r.player_id === key);
-    const ev = myEvents.filter((e) => e.player_id === key);
+    const res = myResults.filter((r) => group(r.player_id) === key);
+    const ev = myEvents.filter((e) => group(e.player_id) === key);
     const sum = (kind: LeagueEvent["kind"]) => ev.filter((e) => e.kind === kind).reduce((t, e) => t + e.value, 0);
+    const recibidas = myEvents
+      .filter((e) => e.kind === "piscina" && e.target_player_id && group(e.target_player_id) === key)
+      .reduce((t, e) => t + e.value, 0);
+    const thrown = [...seats, ...liveSeats].reduce((t, { s }) => t + s.thrown, 0);
+    const received = [...seats, ...liveSeats].reduce((t, { s }) => t + s.received, 0);
     const juego = streaks(seats.map(({ s }) => s.place === 1));
     const liga = streaks(res.map((r) => r.position === 1));
     const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
@@ -202,8 +213,8 @@ export function playerStats(opts: {
       streak: juego.current,
       bestStreak: juego.best,
       form: seats.slice(-10).map(({ s, n, id }) => ({ place: s.place, of: n, partidaId: id })),
-      thrown: [...seats, ...liveSeats].reduce((t, { s }) => t + s.thrown, 0),
-      received: [...seats, ...liveSeats].reduce((t, { s }) => t + s.received, 0),
+      thrown,
+      received,
       juegoPts: seats.reduce((t, { s }) => t + (s.points ?? 0), 0),
       zeroWins: seats.filter(({ s }) => s.place === 1 && s.minLives === 0).length,
       jornadas: res.length,
@@ -214,8 +225,12 @@ export function playerStats(opts: {
       jornadaStreak: liga.current,
       bestJornadaStreak: liga.best,
       piscinas: sum("piscina"),
+      recibidas,
       autopiscinas: sum("autopiscina"),
       historia: sum("historia"),
+      pisDadas: sum("piscina") + thrown,
+      pisRecibidas: recibidas + received,
+      pisBalance: sum("piscina") + thrown - (recibidas + received),
     };
   });
 }
@@ -236,7 +251,10 @@ export function records(stats: PlayerStats[], resumenes: Resumen[]): Record[] {
   top((s) => s.wins, "🏆", "Más partidas ganadas", (n) => `${n}`);
   top((s) => s.firstOut, "🪦", "Más veces primero en caer", (n) => `${n}`);
   top((s) => s.lost, "🩸", "Más vidas perdidas", (n) => `${n}`);
-  top((s) => s.piscinas, "🏊", "Más piscinas", (n) => `${n}`);
+  top((s) => s.pisDadas, "🏊", "Más piscinas entregadas", (n) => `${n}`);
+  top((s) => s.pisRecibidas, "💧", "Más piscinas recibidas", (n) => `${n}`);
+  top((s) => s.pisBalance, "📈", "Mejor balance de piscinas", (n) => `+${n}`);
+  top((s) => -s.pisBalance, "📉", "Peor balance de piscinas", (n) => `-${n}`);
   top((s) => s.thrown, "🏊", "Más piscinas lanzadas en partidas", (n) => `${n}`);
   top((s) => s.received, "💧", "Más piscinas recibidas en partidas", (n) => `${n}`);
   top((s) => s.zeroWins, "0️⃣", "Más victorias desde la vida cero", (n) => `${n}`);
@@ -276,4 +294,26 @@ export function splashes(resumenes: Resumen[]): Splash[] {
     }
   }
   return [...out.values()].sort((a, b) => b.n - a.n);
+}
+
+export type Pair = { from: { key: string; name: string; color: string }; to: { key: string; name: string; color: string }; n: number };
+
+// Piscinas de liga (jornadas) + modo juego agrupadas por quién a quién
+export function allSplashes(resumenes: Resumen[], events: LeagueEvent[], stats: PlayerStats[], range: Range, jornadas: Jornada[]): Pair[] {
+  const who = new Map(stats.map((s) => [s.key, { key: s.key, name: s.name, color: s.color }]));
+  const day = new Map(jornadas.map((j) => [j.id, j.played_on]));
+  const out = new Map<string, Pair>();
+  const add = (a: { key: string; name: string; color: string }, b: { key: string; name: string; color: string }, n: number) => {
+    const k = `${a.key}>${b.key}`;
+    out.set(k, { from: a, to: b, n: (out.get(k)?.n ?? 0) + n });
+  };
+  for (const p of splashes(resumenes)) add(who.get(p.from.key) ?? p.from, who.get(p.to.key) ?? p.to, p.n);
+  for (const e of events) {
+    if (e.kind !== "piscina" || !e.target_player_id) continue;
+    if (!inRange((e.jornada_id && day.get(e.jornada_id)) || dayOf(e.created_at), range)) continue;
+    const a = who.get(e.player_id) ?? who.get(WILDCARD);
+    const b = who.get(e.target_player_id) ?? who.get(WILDCARD);
+    if (a && b) add(a, b, e.value);
+  }
+  return [...out.values()].sort((x, y) => y.n - x.n);
 }

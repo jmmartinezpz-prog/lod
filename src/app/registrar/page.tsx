@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { defaultPoints } from "@/lib/scoring";
 import type { JornadaKind, LeagueEvent } from "@/lib/types";
 
-type PendingEvent = { player_id: string; kind: LeagueEvent["kind"]; description: string };
+type PendingEvent = { player_id: string; target_player_id: string; kind: LeagueEvent["kind"]; description: string };
 
 export default function Registrar() {
   return (
@@ -21,9 +21,11 @@ export default function Registrar() {
 
 function Form() {
   const router = useRouter();
-  const { players, nextNumber, loading, error } = useLeague();
+  const { players, dias, nextNumber, loading, error } = useLeague();
+  const today = new Date().toISOString().slice(0, 10);
+  const todayDia = dias.find((d) => d.played_on === today);
+  const [diaChoice, setDiaChoice] = useState<string>("");
   const [number, setNumber] = useState<number | "">("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [kind, setKind] = useState<JornadaKind>("normal");
   const [game, setGame] = useState("dados");
   const [notes, setNotes] = useState("");
@@ -54,9 +56,19 @@ function Form() {
     if (order.length < 2) return setMsg("Marca al menos 2 jugadores en orden de llegada.");
     setBusy(true);
     setMsg(null);
+    let diaId = diaChoice || todayDia?.id || "new";
+    if (diaId === "new") {
+      const num = Math.max(0, ...dias.map((d) => d.number)) + 1;
+      const { data: d, error: e0 } = await supabase.from("dias").insert({ number: num, played_on: today }).select().single();
+      if (e0 || !d) {
+        setBusy(false);
+        return setMsg(e0?.message ?? "No se pudo crear el día");
+      }
+      diaId = d.id;
+    }
     const { data: j, error: e1 } = await supabase
       .from("jornadas")
-      .insert({ number: n, played_on: date, kind, game, notes: notes || null })
+      .insert({ number: n, dia_id: diaId, played_on: today, kind, game, notes: notes || null })
       .select()
       .single();
     if (e1 || !j) {
@@ -68,7 +80,12 @@ function Form() {
     );
     const { error: e3 } = pending.length
       ? await supabase.from("events").insert(
-          pending.map((p) => ({ ...p, description: p.description || null, jornada_id: j.id })),
+          pending.map((p) => ({
+            ...p,
+            target_player_id: p.kind === "historia" ? null : p.kind === "autopiscina" ? p.player_id : p.target_player_id,
+            description: p.description || null,
+            jornada_id: j.id,
+          })),
         )
       : { error: null };
     setBusy(false);
@@ -96,8 +113,16 @@ function Form() {
           />
         </label>
         <label className="text-sm">
-          <span className="text-muted">Fecha</span>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <span className="text-muted">Día</span>
+          <select value={diaChoice || todayDia?.id || "new"} onChange={(e) => setDiaChoice(e.target.value)}>
+            {!todayDia && <option value="new">Nuevo día (hoy)</option>}
+            {dias.map((d) => (
+              <option key={d.id} value={d.id}>
+                Día {d.number}{d.played_on ? ` · ${new Date(d.played_on).toLocaleDateString("es-ES")}` : ""}
+              </option>
+            ))}
+            {todayDia && <option value="new">Nuevo día</option>}
+          </select>
         </label>
         <label className="text-sm">
           <span className="text-muted">Tipo</span>
@@ -162,21 +187,26 @@ function Form() {
       <section className="space-y-2">
         <h2 className="font-semibold">Piscinas / autopiscinas / historia</h2>
         {pending.map((ev, i) => (
-          <div key={i} className="flex gap-2">
+          <div key={i} className="flex flex-wrap gap-2 sm:flex-nowrap">
             <select value={ev.player_id} onChange={(e) => setPending((p) => p.map((x, k) => (k === i ? { ...x, player_id: e.target.value } : x)))}>
               {active.map((p) => <option key={p.id} value={p.id}>{p.nickname}</option>)}
             </select>
             <select value={ev.kind} onChange={(e) => setPending((p) => p.map((x, k) => (k === i ? { ...x, kind: e.target.value as LeagueEvent["kind"] } : x)))}>
-              <option value="piscina">🏊 Piscina</option>
+              <option value="piscina">🏊 Piscina a…</option>
               <option value="autopiscina">🤦 Autopiscina</option>
               <option value="historia">📜 Historia</option>
             </select>
+            {ev.kind === "piscina" && (
+              <select value={ev.target_player_id} onChange={(e) => setPending((p) => p.map((x, k) => (k === i ? { ...x, target_player_id: e.target.value } : x)))}>
+                {active.filter((p) => p.id !== ev.player_id).map((p) => <option key={p.id} value={p.id}>{p.nickname}</option>)}
+              </select>
+            )}
             <input placeholder="Detalle" value={ev.description} onChange={(e) => setPending((p) => p.map((x, k) => (k === i ? { ...x, description: e.target.value } : x)))} />
             <button onClick={() => setPending((p) => p.filter((_, k) => k !== i))} className="px-2 text-red">✕</button>
           </div>
         ))}
         <button
-          onClick={() => active[0] && setPending((p) => [...p, { player_id: active[0].id, kind: "piscina", description: "" }])}
+          onClick={() => active[1] && setPending((p) => [...p, { player_id: active[0].id, target_player_id: active[1].id, kind: "piscina", description: "" }])}
           className="text-sm text-gold"
         >
           + Añadir evento

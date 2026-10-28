@@ -108,8 +108,9 @@ export function heal(g: Game, id: string): Game {
   return move(g, seat, restores ? 0 : 1, g.zeroGoneBy === id ? null : g.zeroGoneBy, "vida", null);
 }
 
+// Siempre se juega a 5: con wildcards los puntos se reparten igual (los que sobren, 0)
 export const pointsFor = (kind: JornadaKind, players: number, place: number) =>
-  defaultPoints(players, kind)?.[place - 1] ?? null;
+  (defaultPoints(players, kind) ?? defaultPoints(5, kind)!)[place - 1] ?? 0;
 
 // Clasificación de la partida: vivos por vidas, luego los reventados del último al primero en caer.
 export function finalStandings(g: Game) {

@@ -17,7 +17,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="es" className={`h-full antialiased ${outfit.variable}`}>
       <body className="min-h-full flex flex-col">
         <Nav />
-        <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-28 pt-4">{children}</main>
+        <main className="w-full flex-1 px-4 pb-28 pt-4 sm:px-6 lg:px-10">{children}</main>
       </body>
     </html>
   );

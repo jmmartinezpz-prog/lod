@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Status } from "@/components/Status";
 import { LivesChart } from "@/components/LivesChart";
+import { ProgressChart } from "@/components/ProgressChart";
+import { leagueHistory, regularsOf } from "@/lib/history";
 import { useLeague } from "@/lib/useLeague";
 import { usePartidas } from "@/lib/partidas";
-import { dayOf, inRange, playerStats, records, resumir, splashes, type PlayerStats, type Range, type Resumen } from "@/lib/stats";
+import { allSplashes, dayOf, inRange, playerStats, records, resumir, type PlayerStats, type Range, type Resumen } from "@/lib/stats";
 
 type Preset = "todo" | "hoy" | "7" | "30" | "mes" | "fechas";
 const PRESETS: { id: Preset; label: string }[] = [
@@ -55,9 +57,14 @@ export default function Estadisticas() {
   const range = presetRange(preset, custom, now);
 
   const todas = useMemo(
-    () => resumir(juego.partidas, juego.jugadores, juego.movimientos, now),
-    [juego.partidas, juego.jugadores, juego.movimientos, now],
+    () => resumir(juego.partidas, juego.jugadores, juego.movimientos, now, new Set(regularsOf(league.players).map((p) => p.id))),
+    [juego.partidas, juego.jugadores, juego.movimientos, now, league.players],
   );
+  const history = useMemo(
+    () => leagueHistory(league.players, league.dias, league.jornadas, league.results, league.adjustments),
+    [league.players, league.dias, league.jornadas, league.results, league.adjustments],
+  );
+  const [focus, setFocus] = useState<string | null>(null);
   const live = todas.findLast((r) => r.live) ?? null;
   const enRango = todas.filter((r) => inRange(dayOf(r.partida.started_at), range));
   const terminadas = enRango.filter((r) => !r.live);
@@ -72,7 +79,7 @@ export default function Estadisticas() {
     range,
   });
   const recs = records(stats, terminadas);
-  const pairs = splashes(enRango);
+  const pairs = allSplashes(enRango, league.events, stats, range, league.jornadas);
   const jornadasEnRango = league.jornadas.filter((j) => inRange(j.played_on, range)).length;
   const sum = (pick: (s: PlayerStats) => number) => stats.reduce((t, s) => t + pick(s), 0);
 
@@ -120,9 +127,22 @@ export default function Estadisticas() {
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Tile icon="⚔️" label="Partidas" value={terminadas.length} />
         <Tile icon="🎲" label="Jornadas" value={jornadasEnRango} />
-        <Tile icon="🏊" label="Piscinas" value={sum((s) => s.piscinas)} />
+        <Tile icon="🏊" label="Piscinas" value={sum((s) => s.pisDadas)} />
         <Tile icon="📜" label="Historia" value={sum((s) => s.historia)} />
       </section>
+
+      <Card title="📈 Progreso de la liga">
+        <ProgressChart history={history} focus={focus} onFocus={setFocus} />
+        <p className="mt-2 text-xs text-muted">Toca o pasa el ratón por la gráfica para ver cada jornada · D = inicio de cada día · toca un nombre para resaltarlo</p>
+      </Card>
+
+      <Individual
+        history={history}
+        stats={stats}
+        standings={league.standings.map((s) => ({ key: s.player.id, points: s.points }))}
+        focus={focus ?? league.standings[0]?.player.id ?? null}
+        onFocus={setFocus}
+      />
 
       {juego.error && (
         <p className="rounded-lg border border-red/50 bg-red/10 p-3 text-sm text-red">
@@ -207,17 +227,20 @@ export default function Estadisticas() {
       </Card>
 
       {/* Barras */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Bars title="⭐ Puntos en partidas" stats={stats} pick={(s) => s.juegoPts} />
         <Bars title="🏆 Partidas ganadas" stats={stats} pick={(s) => s.wins} />
         <Bars title="🪦 Primero en caer" stats={stats} pick={(s) => s.firstOut} />
-        <Bars title="🏊 Piscinas" stats={stats} pick={(s) => s.piscinas} />
+        <Bars title="🏊 Piscinas entregadas" stats={stats} pick={(s) => s.pisDadas} />
+        <Bars title="💧 Piscinas recibidas" stats={stats} pick={(s) => s.pisRecibidas} />
         <Bars title="📜 Puntos de historia" stats={stats} pick={(s) => s.historia} />
         <Bars title="🤦 Autopiscinas" stats={stats} pick={(s) => s.autopiscinas} />
         <Bars title="🩸 Vidas perdidas" stats={stats} pick={(s) => s.lost} />
         <Bars title="🏊 Piscinas lanzadas (partidas)" stats={stats} pick={(s) => s.thrown} />
         <Bars title="💧 Piscinas recibidas (partidas)" stats={stats} pick={(s) => s.received} />
       </div>
+
+      <Balance stats={stats} />
 
       {pairs.length > 0 && (
         <Card title="🏊 Quién le lanza piscinas a quién">
@@ -293,13 +316,16 @@ export default function Estadisticas() {
 
       <Card title="🏊 Palmarés">
         <Table
-          stats={stats.filter((s) => s.piscinas + s.autopiscinas + s.historia > 0).sort((a, b) => b.piscinas - a.piscinas)}
+          stats={stats.filter((s) => s.pisDadas + s.pisRecibidas + s.autopiscinas + s.historia > 0).sort((a, b) => b.pisBalance - a.pisBalance)}
           cols={[
-            ["🏊 Piscinas", (s) => s.piscinas],
+            ["🏊 Entregadas", (s) => s.pisDadas],
+            ["💧 Recibidas", (s) => s.pisRecibidas],
+            ["± Balance", (s) => (s.pisBalance > 0 ? `+${s.pisBalance}` : s.pisBalance)],
             ["🤦 Autopiscinas", (s) => s.autopiscinas],
             ["📜 Historia", (s) => s.historia],
           ]}
         />
+        <p className="mt-3 text-xs text-muted">Piscinas de las jornadas de liga + las del modo juego. Balance = entregadas − recibidas.</p>
       </Card>
     </div>
   );
@@ -407,5 +433,155 @@ function Table({ stats, cols }: { stats: PlayerStats[]; cols: [string, (s: Playe
         </tbody>
       </table>
     </div>
+  );
+}
+
+// Balance de piscinas: verde si das más de las que recibes, rojo si al revés
+function Balance({ stats }: { stats: PlayerStats[] }) {
+  const rows = stats.filter((s) => s.pisDadas + s.pisRecibidas > 0).sort((a, b) => b.pisBalance - a.pisBalance);
+  const max = Math.max(1, ...rows.map((s) => Math.abs(s.pisBalance)));
+  return (
+    <Card title="⚖️ Balance de piscinas (entregadas − recibidas)">
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted">Nada todavía</p>
+      ) : (
+        <ul className="space-y-2.5">
+          {rows.map((s) => (
+            <li key={s.key} className="grid grid-cols-[8.5rem_1fr_2.5rem] items-center gap-2">
+              <div className="min-w-0">
+                <Name s={s} />
+                <p className="text-xs text-muted">🏊 {s.pisDadas} · 💧 {s.pisRecibidas}</p>
+              </div>
+              <div className="relative h-3">
+                <div className="absolute inset-y-0 left-1/2 w-px bg-line" />
+                <div
+                  className="absolute inset-y-0 rounded"
+                  style={{
+                    width: `${(Math.abs(s.pisBalance) / max) * 50}%`,
+                    [s.pisBalance >= 0 ? "left" : "right"]: "50%",
+                    background: s.pisBalance >= 0 ? "#4caf7d" : "var(--red)",
+                  }}
+                />
+              </div>
+              <span className={`tabular text-right text-sm font-bold ${s.pisBalance > 0 ? "text-[#4caf7d]" : s.pisBalance < 0 ? "text-red" : ""}`}>
+                {s.pisBalance > 0 ? `+${s.pisBalance}` : s.pisBalance}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+// Ficha de cada jugador: liderato (histórico completo) + sus números en las fechas elegidas
+function Individual({ history, stats, standings, focus, onFocus }: {
+  history: ReturnType<typeof leagueHistory>;
+  stats: PlayerStats[];
+  standings: { key: string; points: number }[];
+  focus: string | null;
+  onFocus: (key: string) => void;
+}) {
+  const who = history.series.find((s) => s.key === focus) ?? history.series[0];
+  if (!who) return null;
+  const lead = history.leadership.get(who.key)!;
+  const st = stats.find((s) => s.key === who.key);
+  const pos = standings.findIndex((s) => s.key === who.key);
+  const pts = standings[pos]?.points ?? 0;
+  const ahead = standings[pos - 1];
+  const totalJ = history.snapshots.length - 1;
+  const totalD = new Set(history.snapshots.map((s) => s.diaNumber).filter((d) => d !== null)).size;
+
+  const groups: { title: string; items: [string, string | number][] }[] = [
+    {
+      title: "👑 Liderato (histórico)",
+      items: [
+        ["Jornadas como líder", `${lead.jornadasLider} de ${totalJ}`],
+        ["Días como líder", `${lead.diasLider} de ${totalD}`],
+        ["Mejor racha de líder", `${lead.mejorRacha} jornadas`],
+        ["Líder ahora", lead.liderDesde ? `desde J${lead.liderDesde}` : "no"],
+        ["Mejor puesto", lead.mejorPuesto ? `${lead.mejorPuesto}º` : "–"],
+        ["Peor puesto", lead.peorPuesto ? `${lead.peorPuesto}º` : "–"],
+      ],
+    },
+    {
+      title: "🎲 Liga",
+      items: [
+        ["Jornadas", st?.jornadas ?? 0],
+        ["Victorias", st?.jornadaWins ?? 0],
+        ["Podios", st?.podios ?? 0],
+        ["Puesto medio", fmt(st?.avgPos ?? null)],
+        ["Racha de victorias", st?.jornadaStreak ?? 0],
+        ["Mejor racha", st?.bestJornadaStreak ?? 0],
+      ],
+    },
+    {
+      title: "🏊 Piscinas",
+      items: [
+        ["Entregadas", st?.pisDadas ?? 0],
+        ["Recibidas", st?.pisRecibidas ?? 0],
+        ["Balance", st ? (st.pisBalance > 0 ? `+${st.pisBalance}` : st.pisBalance) : 0],
+        ["Autopiscinas", st?.autopiscinas ?? 0],
+        ["Puntos de historia", st?.historia ?? 0],
+      ],
+    },
+    {
+      title: "⚔️ Modo juego",
+      items: [
+        ["Partidas", st?.partidas ?? 0],
+        ["Victorias", st?.wins ?? 0],
+        ["Puntos", st?.juegoPts ?? 0],
+        ["Primero en caer", st?.firstOut ?? 0],
+      ],
+    },
+  ];
+
+  return (
+    <Card title="👤 Jugador a jugador">
+      <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        {history.series.map((s) => (
+          <button
+            key={s.key}
+            onClick={() => onFocus(s.key)}
+            className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-sm ${
+              s.key === who.key ? "bg-felt font-semibold text-ink ring-2 ring-gold" : "border border-line text-muted"
+            }`}
+          >
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
+            {s.name}
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-end gap-x-6 gap-y-2 rounded-2xl p-4" style={{ background: `color-mix(in srgb, ${who.color} 22%, var(--felt))` }}>
+        <div className="min-w-0 flex-1">
+          <p className="text-2xl font-bold leading-tight">{who.name}</p>
+          <p className="text-sm text-muted">
+            {pos === 0 ? "👑 Líder de la liga" : ahead ? `${pos + 1}º · a ${ahead.points - pts} del ${pos}º` : `${pos + 1}º`}
+          </p>
+        </div>
+        <p className="text-right">
+          <span className="tabular text-4xl font-bold">{pts}</span>
+          <span className="block text-xs text-muted">puntos</span>
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {groups.map((g) => (
+          <div key={g.title} className="rounded-xl bg-felt p-3">
+            <p className="mb-2 text-sm font-semibold">{g.title}</p>
+            <dl className="space-y-1 text-sm">
+              {g.items.map(([k, v]) => (
+                <div key={k} className="flex justify-between gap-3">
+                  <dt className="text-muted">{k}</dt>
+                  <dd className="tabular font-semibold">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-muted">El liderato es de toda la liga; el resto sigue el filtro de fechas.</p>
+    </Card>
   );
 }

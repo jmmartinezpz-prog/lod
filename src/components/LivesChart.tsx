@@ -7,7 +7,7 @@ const H = 260;
 const M = { t: 14, r: 100, b: 26, l: 30 };
 const STEPS = [1, 2, 5, 10, 15, 30, 60, 120];
 
-function useWidth() {
+export function useWidth() {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -20,7 +20,7 @@ function useWidth() {
 }
 
 // Etiqueta corta sin puntos suspensivos: palabras enteras mientras quepan
-function short(name: string) {
+export function short(name: string) {
   let out = "";
   for (const w of name.split(" ")) {
     if (out && [...`${out} ${w}`].length > 13) break;

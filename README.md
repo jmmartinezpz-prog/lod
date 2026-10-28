@@ -6,7 +6,7 @@ Stack: Next.js + Supabase + Vercel.
 
 ## Puesta en marcha
 
-1. **Supabase → SQL Editor**: ejecuta `supabase/01_schema.sql` y después `supabase/02_seed.sql`.
+1. **Supabase → SQL Editor**: ejecuta en orden `supabase/01_schema.sql`, `02_seed.sql`, `03_juego.sql` y `04_historico.sql` (carga J1–J45 separadas en 7 días).
 2. **Supabase → Authentication → Users → Add user**: crea tu usuario admin (email + contraseña).
 3. **Supabase → Authentication → Sign In / Providers**: desactiva *Allow new users to sign up*.
 4. Copia `.env.example` como `.env.local` y rellena URL y anon key.

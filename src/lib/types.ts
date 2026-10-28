@@ -9,10 +9,18 @@ export type Player = {
 
 export type JornadaKind = "normal" | "sobrante";
 
+export type Dia = {
+  id: string;
+  number: number;
+  played_on: string | null;
+  notes: string | null;
+};
+
 export type Jornada = {
   id: string;
   number: number;
-  played_on: string;
+  dia_id: string | null;
+  played_on: string; // en el histórico J1–J45 se rellena al poner la fecha del día
   kind: JornadaKind;
   game: string;
   notes: string | null;
@@ -40,6 +48,7 @@ export type LeagueEvent = {
   id: string;
   player_id: string;
   kind: "piscina" | "autopiscina" | "historia";
+  target_player_id: string | null;
   value: number;
   description: string | null;
   jornada_id: string | null;
