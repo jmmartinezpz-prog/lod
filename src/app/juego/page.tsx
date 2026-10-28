@@ -35,6 +35,21 @@ function saveOrder(ids: string[]) {
   } catch {}
 }
 
+const COLORS_KEY = "lod-colores"; // color de cada jugador: se mantiene de una partida a otra
+
+function readColors(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(COLORS_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+function saveColors(colors: Record<string, string>) {
+  try {
+    localStorage.setItem(COLORS_KEY, JSON.stringify(colors));
+  } catch {}
+}
+
 function moveTo<T>(list: T[], from: number, to: number) {
   const next = [...list];
   next.splice(to, 0, ...next.splice(from, 1));
@@ -210,14 +225,8 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrden(readOrder());
+    setColorOf(readColors());
   }, []);
-  // El orden actual es el de las cartas en pantalla
-  const drag = useDragOrder((dragged, over) => {
-    const ids = [...document.querySelectorAll<HTMLElement>("[data-drag-key]")].map((el) => el.dataset.dragKey!);
-    const next = moveTo(ids, ids.indexOf(dragged), ids.indexOf(over));
-    setOrden(next);
-    saveOrder(next.filter((id) => !id.startsWith("wc-")));
-  });
 
   if (loading || error) return <Status loading={loading} error={error} />;
 
@@ -232,8 +241,9 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   };
   const candidates = [...regulars, ...wildcards].map((c, i) => ({ c, i })).sort((a, b) => pos(a.c.id) - pos(b.c.id) || a.i - b.i).map(({ c }) => c);
   const seated = candidates.filter((c) => !excluded.has(c.id));
+  // Los colores no dependen de dónde se siente cada uno: orden fijo de la liga, y los elegidos se recuerdan
   const assigned = assignColors(
-    [...seated, ...candidates.filter((c) => excluded.has(c.id))].map((c) => c.id),
+    [...regulars, ...wildcards].sort((a, b) => Number(excluded.has(a.id)) - Number(excluded.has(b.id))).map((c) => c.id),
     colorOf,
   );
   const color = (id: string) => assigned.get(id)!;
@@ -254,6 +264,7 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
     setColorOf((cur) => {
       const next = { ...cur, [id]: hex };
       for (const k of Object.keys(next)) if (k !== id && next[k] === hex) delete next[k];
+      saveColors(next);
       return next;
     });
     setPainting(null);
@@ -267,6 +278,10 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   }
 
   function begin() {
+    // Cada jugador de la liga se queda con su color para las próximas partidas
+    const fijos = { ...colorOf };
+    for (const r of regulars) fijos[r.id] = color(r.id);
+    saveColors(fijos);
     onStart(
       newGame(
         start,
@@ -325,7 +340,7 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
       </section>
 
       <section className="space-y-3">
-        <p className="text-sm text-muted">Jugadores · toca para quitar, 🎨 para cambiar color, ⠿ arrastra para ponerlos en el orden de la mesa</p>
+        <p className="text-sm text-muted">Jugadores · toca para quitar, 🎨 para cambiar color. El orden de la mesa se coloca ya jugando, con ⇅.</p>
         <div className="grid grid-cols-2 gap-2.5">
           {candidates.map((c) => {
             const on = !excluded.has(c.id);
@@ -333,8 +348,7 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
             return (
               <div
                 key={c.id}
-                data-drag-key={c.id}
-                className={`relative h-24 overflow-hidden rounded-2xl shadow-lg transition ${on ? "" : "opacity-30 grayscale"} ${drag.dragging === c.id ? "scale-95 ring-4 ring-gold" : ""}`}
+                className={`relative h-24 overflow-hidden rounded-2xl shadow-lg transition ${on ? "" : "opacity-30 grayscale"}`}
                 style={{ background: tileBg(color(c.id)), containerType: "size" }}
               >
                 <button onClick={() => toggle(c.id)} className="flex h-full w-full items-end px-3 pb-2.5 pt-10 text-white">
@@ -347,18 +361,11 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
                 >
                   🎨
                 </button>
-                <button
-                  {...drag.handle(c.id)}
-                  aria-label={`Mover a ${c.name}`}
-                  className="absolute left-2 top-2 flex h-8 w-8 cursor-grab items-center justify-center rounded-full bg-black/25 text-lg text-white"
-                >
-                  ⠿
-                </button>
                 {isWild && (
                   <button
                     onClick={() => setWildcards((cur) => cur.filter((w) => w.id !== c.id))}
                     aria-label="Quitar wildcard"
-                    className="absolute left-11 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/25 text-sm text-white"
+                    className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/25 text-sm text-white"
                   >
                     ✕
                   </button>
@@ -667,7 +674,7 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
             aria-label="Ordenar cartas"
             className={`h-9 rounded-full px-2.5 text-sm font-semibold ${ordering ? "bg-gold text-black" : ""}`}
           >
-            {ordering ? "✓ Listo" : "⇅"}
+            {ordering ? "✓ Listo" : "⇅ Ordenar"}
           </button>
           <button onClick={rematch} aria-label="Nueva partida" className="h-9 w-9 rounded-full text-lg">↺</button>
           <button onClick={() => setMenu(true)} aria-label="Terminar o cancelar" className="h-9 w-9 rounded-full text-lg">✕</button>
