@@ -6,7 +6,12 @@ import { playerLabel, type LeagueHistory, type Leadership } from "./history";
 // Una partida sin movimientos desde hace tanto se da por terminada
 const LIVE_WINDOW = 3 * 60 * 60 * 1000;
 
-export const dayOf = (iso: string) => new Date(iso).toLocaleDateString("sv-SE"); // yyyy-mm-dd local
+// Día de juego (yyyy-mm-dd, hora local). Hasta las 6:00 sigue contando como el día anterior,
+// porque muchas noches se acaba pasada la medianoche.
+export const DAY_CUTOFF_HOURS = 6;
+export const dayOf = (iso: string) =>
+  new Date(Date.parse(iso) - DAY_CUTOFF_HOURS * 3_600_000).toLocaleDateString("sv-SE");
+export const gameToday = () => dayOf(new Date().toISOString());
 
 export type Range = { from: string | null; to: string | null };
 // Lo que no tiene fecha (jornadas de días sin fechar) solo entra cuando no se filtra

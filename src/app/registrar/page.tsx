@@ -8,6 +8,7 @@ import { useLeague } from "@/lib/useLeague";
 import { supabase } from "@/lib/supabase";
 import { defaultPoints } from "@/lib/scoring";
 import type { JornadaKind, LeagueEvent } from "@/lib/types";
+import { gameToday } from "@/lib/stats";
 
 type PendingEvent = { player_id: string; target_player_id: string; kind: LeagueEvent["kind"]; description: string };
 
@@ -22,7 +23,7 @@ export default function Registrar() {
 function Form() {
   const router = useRouter();
   const { players, dias, nextNumber, loading, error } = useLeague();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = gameToday(); // pasada la medianoche sigue siendo el mismo día de juego
   const todayDia = dias.find((d) => d.played_on === today);
   const [diaChoice, setDiaChoice] = useState<string>("");
   const [number, setNumber] = useState<number | "">("");
