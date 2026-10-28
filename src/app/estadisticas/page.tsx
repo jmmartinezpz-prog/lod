@@ -87,7 +87,6 @@ export default function Estadisticas() {
     results: league.results,
     events: league.events,
     resumenes: terminadas,
-    live: enRango.filter((r) => r.live),
     range,
   });
   const periodo = historyIn(history, (d) => inRange(d, range));
@@ -155,7 +154,7 @@ export default function Estadisticas() {
 
       {/* Resumen */}
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Tile icon="⚔️" label="Partidas" value={terminadas.length} />
+        <Tile icon="📅" label="Días" value={new Set(league.jornadas.filter((j) => inRange(j.played_on, range)).map((j) => j.dia_id)).size} />
         <Tile icon="🎲" label="Jornadas" value={jornadasEnRango} />
         <Tile icon="🏊" label="Piscinas" value={sum((s) => s.pisDadas)} />
         <Tile icon="📜" label="Historia" value={sum((s) => s.historia)} />
@@ -260,7 +259,7 @@ export default function Estadisticas() {
 
         {/* Racha y forma */}
         <Card title="🔥 Racha y forma (últimas 10 partidas)">
-          {terminadas.length === 0 ? (
+          {stats.every((s) => s.partidas === 0) ? (
             <Empty />
           ) : (
             <ul className="space-y-2.5">
@@ -329,12 +328,12 @@ export default function Estadisticas() {
   <Bars title="⭐ Puntos en partidas" stats={stats} pick={(s) => s.juegoPts} />
   <Bars title="🏆 Partidas ganadas" stats={stats} pick={(s) => s.wins} />
   <Bars title="🪦 Primero en caer" stats={stats} pick={(s) => s.firstOut} />
-  <Bars title="🩸 Vidas perdidas" stats={stats} pick={(s) => s.lost} />
-  <Bars title="🏊 Piscinas lanzadas (partidas)" stats={stats} pick={(s) => s.thrown} />
-  <Bars title="💧 Piscinas recibidas (partidas)" stats={stats} pick={(s) => s.received} />
+  <Bars title="🏊 Piscinas lanzadas" stats={stats} pick={(s) => s.thrown} />
+  <Bars title="💧 Piscinas recibidas" stats={stats} pick={(s) => s.received} />
+  <Bars title="🩸 Vidas perdidas (desde el 28/10)" stats={stats} pick={(s) => s.lost} />
         </div>
         {/* Tablas completas */}
-        <Card title="⚔️ Modo juego">
+        <Card title="⚔️ Partidas">
           <Table
             stats={stats.filter((s) => s.partidas > 0).sort((a, b) => b.juegoPts - a.juegoPts || b.wins - a.wins)}
             cols={[
@@ -346,18 +345,23 @@ export default function Estadisticas() {
               ["💀 1º caer", (s) => s.firstOut],
               ["🔥 Racha", (s) => s.streak],
               ["Mejor racha", (s) => s.bestStreak],
-              ["🩸 Perdidas", (s) => s.lost],
               ["🏊 Lanzadas", (s) => s.thrown],
               ["💧 Recibidas", (s) => s.received],
-              ["0️⃣ Victorias en vida cero", (s) => s.zeroWins],
-            ["❤️ Vidas al ganar (media)", (s) => fmt(s.vidasAlGanar)],
-            ["💪 Victoria más holgada", (s) => s.maxVidasGanando ?? "–"],
-            ["😅 Por la mínima", (s) => s.porLaMinima],
-            ["🩸 Vidas perdidas / partida", (s) => fmt(s.vidasPorPartida)],
-            ["🤦 Autopiscinas", (s) => s.autosJuego],
-              ["💚 Recuperadas", (s) => s.gained],
+              ["🤦 Autopiscinas", (s) => s.autopiscinas],
+              ["Con marcador*", (s) => s.partidasConVidas],
+              ["🩸 Perdidas*", (s) => s.lost],
+              ["🩸 Perdidas / partida*", (s) => fmt(s.vidasPorPartida)],
+              ["💚 Recuperadas*", (s) => s.gained],
+              ["❤️ Vidas al ganar*", (s) => fmt(s.vidasAlGanar)],
+              ["💪 Victoria más holgada*", (s) => s.maxVidasGanando ?? "–"],
+              ["😅 Por la mínima*", (s) => s.porLaMinima],
+              ["0️⃣ Victorias en vida cero*", (s) => s.zeroWins],
             ]}
           />
+          <p className="mt-3 text-xs text-muted">
+            Cada jornada cuenta como una partida: puntos, victorias, puestos y piscinas salen de todas las jornadas.
+            * Lo de las vidas, solo desde el 28/10, cuando empezamos a llevar el marcador en la app.
+          </p>
         </Card>
         </>
       )}
@@ -688,12 +692,13 @@ function Individual({ history, stats, standings, focus, onFocus, sanciones, fina
       })(),
     },
     {
-      title: "⚔️ Modo juego",
+      title: "⚔️ Partidas",
       items: [
         ["Partidas", st?.partidas ?? 0],
         ["Victorias", st?.wins ?? 0],
         ["Puntos", st?.juegoPts ?? 0],
         ["Primero en caer", st?.firstOut ?? 0],
+        ["Con marcador (desde el 28/10)", st?.partidasConVidas ?? 0],
         ["❤️ Vidas al ganar (media)", fmt(st?.vidasAlGanar ?? null)],
         ["💪 Victoria más holgada", st?.maxVidasGanando != null ? `${st.maxVidasGanando} vidas` : "–"],
         ["😅 Victorias por la mínima", st?.porLaMinima ?? 0],

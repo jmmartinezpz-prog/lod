@@ -9,6 +9,8 @@ const LIVE_WINDOW = 3 * 60 * 60 * 1000;
 // Día de juego (yyyy-mm-dd, hora local). Hasta las 6:00 sigue contando como el día anterior,
 // porque muchas noches se acaba pasada la medianoche.
 export const DAY_CUTOFF_HOURS = 6;
+// Desde este día se juega con el marcador de la app: antes no hay vidas apuntadas
+export const VIDAS_DESDE = "2026-10-28";
 export const dayOf = (iso: string) =>
   new Date(Date.parse(iso) - DAY_CUTOFF_HOURS * 3_600_000).toLocaleDateString("sv-SE");
 export const gameToday = () => dayOf(new Date().toISOString());
@@ -148,6 +150,7 @@ export type PlayerStats = {
   form: FormItem[]; // de más antigua a más reciente
   thrown: number;
   received: number;
+  partidasConVidas: number; // partidas con marcador (desde VIDAS_DESDE)
   zeroWins: number; // victorias desde la vida cero
   vidasAlGanar: number | null; // media de vidas con las que gana: alto = gana sobrado
   maxVidasGanando: number | null; // su victoria más holgada
@@ -181,13 +184,10 @@ export function playerStats(opts: {
   jornadas: Jornada[];
   results: Result[];
   events: LeagueEvent[];
-  resumenes: Resumen[]; // ya filtrados por fecha y terminados
-  live?: Resumen[]; // en curso: solo cuentan para las piscinas
+  resumenes: Resumen[]; // del modo juego, ya filtrados por fecha y terminados: solo para lo de las vidas
   range: Range;
 }): PlayerStats[] {
-  const { players, jornadas, results, events, resumenes, live = [], range } = opts;
-  // Las partidas que ya son jornada tienen sus piscinas también en la liga: en los totales no se cuentan dos veces
-  const fuera = (s: { liga: boolean }) => !s.liga;
+  const { players, jornadas, results, events, resumenes, range } = opts;
   const regulars = players
     .filter((p) => p.active && !p.is_wildcard)
     .sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99) || a.nickname.localeCompare(b.nickname));
@@ -204,60 +204,54 @@ export function playerStats(opts: {
   const myEvents = events.filter((e) =>
     inRange(eventDay(e, jornadaDay), range),
   );
+  // Las vidas solo se cuentan desde que se juega con el marcador de la app
+  const conVidas = resumenes.filter((r) => dayOf(r.partida.started_at) >= VIDAS_DESDE);
 
   const keys = new Map<string, { name: string; color: string }>();
   const colores = coloresDeLiga(players);
   regulars.forEach((p) => keys.set(p.id, { name: label(p), color: colores.get(p.id)! }));
   const group = (id: string | null) => (id && keys.has(id) ? id : WILDCARD);
   const anyWild =
-    [...resumenes, ...live].some((r) => r.seats.some((s) => s.key === WILDCARD)) ||
+    conVidas.some((r) => r.seats.some((s) => s.key === WILDCARD)) ||
     [...myResults, ...myEvents].some((x) => group(x.player_id) === WILDCARD);
   if (anyWild) keys.set(WILDCARD, { name: WILDCARD_NAME, color: "var(--muted)" });
 
   return [...keys].map(([key, { name, color }]) => {
-    const seats = resumenes.flatMap((r) =>
-      r.seats.filter((s) => s.key === key).map((s) => ({ s, n: r.seats.length, id: r.partida.id, liga: Boolean(r.partida.en_liga) })),
-    );
-    const liveSeats = live.flatMap((r) => r.seats.filter((s) => s.key === key).map((s) => ({ s, liga: false })));
+    // Cada jornada es una partida: puestos, puntos, victorias y piscinas salen de las jornadas (todas)
     const res = myResults.filter((r) => group(r.player_id) === key);
     const ev = myEvents.filter((e) => group(e.player_id) === key);
     const sum = (kind: LeagueEvent["kind"]) => ev.filter((e) => e.kind === kind).reduce((t, e) => t + e.value, 0);
     const recibidas = myEvents
       .filter((e) => e.kind === "piscina" && e.target_player_id && group(e.target_player_id) === key)
       .reduce((t, e) => t + e.value, 0);
-    const thrown = [...seats, ...liveSeats].reduce((t, { s }) => t + s.thrown, 0);
-    const received = [...seats, ...liveSeats].reduce((t, { s }) => t + s.received, 0);
-    const autosJuego = [...seats, ...liveSeats].reduce((t, { s }) => t + s.autos, 0);
-    // Para los totales (liga + modo juego), solo las partidas que no han pasado a la liga
-    const soloJuego = [...seats, ...liveSeats].filter(fuera);
-    const thrownExtra = soloJuego.reduce((t, { s }) => t + s.thrown, 0);
-    const receivedExtra = soloJuego.reduce((t, { s }) => t + s.received, 0);
-    const autosExtra = soloJuego.reduce((t, { s }) => t + s.autos, 0);
-    const ganadas = seats.filter(({ s }) => s.place === 1).map(({ s }) => Math.max(0, s.lives));
-    const juego = streaks(seats.map(({ s }) => s.place === 1));
+    const ultimos = res.filter((r) => r.position > 1 && r.position === porJornada.get(r.jornada_id)).length;
+    // Lo de las vidas, del marcador del modo juego (desde VIDAS_DESDE)
+    const seats = conVidas.flatMap((r) => r.seats.filter((s) => s.key === key));
+    const ganadas = seats.filter((s) => s.place === 1).map((s) => Math.max(0, s.lives));
     const liga = streaks(res.map((r) => r.position === 1));
     const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
     return {
       key, name, color,
-      partidas: seats.length,
-      wins: seats.filter(({ s }) => s.place === 1).length,
-      avgPlace: avg(seats.map(({ s }) => s.place)),
-      firstOut: seats.filter(({ s, n }) => s.place === n).length,
-      lost: seats.reduce((t, { s }) => t + s.lost, 0),
-      gained: seats.reduce((t, { s }) => t + s.gained, 0),
-      streak: juego.current,
-      bestStreak: juego.best,
-      form: seats.slice(-10).map(({ s, n, id }) => ({ place: s.place, of: n, partidaId: id })),
-      thrown,
-      received,
-      juegoPts: seats.reduce((t, { s }) => t + (s.points ?? 0), 0),
-      zeroWins: seats.filter(({ s }) => s.place === 1 && s.minLives === 0).length,
+      partidas: res.length,
+      wins: res.filter((r) => r.position === 1).length,
+      avgPlace: avg(res.map((r) => r.position)),
+      firstOut: ultimos,
+      lost: seats.reduce((t, s) => t + s.lost, 0),
+      gained: seats.reduce((t, s) => t + s.gained, 0),
+      streak: liga.current,
+      bestStreak: liga.best,
+      form: res.slice(-10).map((r) => ({ place: r.position, of: porJornada.get(r.jornada_id) ?? r.position, partidaId: r.jornada_id })),
+      thrown: sum("piscina"),
+      received: recibidas,
+      juegoPts: res.reduce((t, r) => t + r.points, 0),
+      partidasConVidas: seats.length,
+      zeroWins: seats.filter((s) => s.place === 1 && s.minLives === 0).length,
       vidasAlGanar: avg(ganadas),
       maxVidasGanando: ganadas.length ? Math.max(...ganadas) : null,
       porLaMinima: ganadas.filter((v) => v <= 1).length,
-      vidasPorPartida: avg(seats.map(({ s }) => s.lost)),
-      autosJuego,
+      vidasPorPartida: avg(seats.map((s) => s.lost)),
+      autosJuego: seats.reduce((t, s) => t + s.autos, 0),
       jornadas: res.length,
       jornadaWins: res.filter((r) => r.position === 1).length,
       podios: res.filter((r) => r.position <= 3).length,
@@ -266,18 +260,18 @@ export function playerStats(opts: {
         acc[r.position - 1] += 1;
         return acc;
       }, []),
-      ultimos: res.filter((r) => r.position > 1 && r.position === porJornada.get(r.jornada_id)).length,
+      ultimos,
       avgPos: avg(res.map((r) => r.position)),
       ligaPts: res.reduce((t, r) => t + r.points, 0),
       jornadaStreak: liga.current,
       bestJornadaStreak: liga.best,
       piscinas: sum("piscina"),
       recibidas,
-      autopiscinas: sum("autopiscina") + autosExtra,
+      autopiscinas: sum("autopiscina"),
       historia: sum("historia"),
-      pisDadas: sum("piscina") + thrownExtra,
-      pisRecibidas: recibidas + receivedExtra,
-      pisBalance: sum("piscina") + thrownExtra - (recibidas + receivedExtra),
+      pisDadas: sum("piscina"),
+      pisRecibidas: recibidas,
+      pisBalance: sum("piscina") - recibidas,
     };
   });
 }
@@ -352,17 +346,15 @@ export function records(stats: PlayerStats[], resumenes: Resumen[]): Record[] {
   top((s) => s.bestStreak, "🔥", "Mejor racha de victorias", (n) => (n === 1 ? "1 victoria" : `${n} seguidas`));
   top((s) => s.wins, "🏆", "Más partidas ganadas", (n) => `${n}`);
   top((s) => s.firstOut, "🪦", "Más veces primero en caer", (n) => `${n}`);
-  top((s) => s.lost, "🩸", "Más vidas perdidas", (n) => `${n}`);
+  top((s) => s.lost, "🩸", "Más vidas perdidas (desde el 28/10)", (n) => `${n}`);
   top((s) => s.pisDadas, "🏊", "Más piscinas entregadas", (n) => `${n}`);
   top((s) => s.pisRecibidas, "💧", "Más piscinas recibidas", (n) => `${n}`);
   top((s) => s.pisBalance, "📈", "Mejor balance de piscinas", (n) => `+${n}`);
   top((s) => -s.pisBalance, "📉", "Peor balance de piscinas", (n) => `-${n}`);
-  top((s) => s.thrown, "🏊", "Más piscinas lanzadas en partidas", (n) => `${n}`);
-  top((s) => s.received, "💧", "Más piscinas recibidas en partidas", (n) => `${n}`);
-  top((s) => s.zeroWins, "0️⃣", "Más victorias desde la vida cero", (n) => `${n}`);
+  top((s) => s.zeroWins, "0️⃣", "Más victorias desde la vida cero (desde el 28/10)", (n) => `${n}`);
   top((s) => s.historia, "📜", "Más puntos de historia", (n) => `${n}`);
   top((s) => s.autopiscinas, "🤦", "Más autopiscinas", (n) => `${n}`);
-  top((s) => s.porLaMinima, "😅", "Más victorias por la mínima", (n) => `${n} con 1 vida o en vida cero`);
+  top((s) => s.porLaMinima, "😅", "Más victorias por la mínima (desde el 28/10)", (n) => `${n} con 1 vida o en vida cero`);
 
   const won = resumenes.filter((r) => r.winner);
   // Remontada: el ganador llegó a estar por debajo de con lo que acabó
