@@ -113,6 +113,10 @@ function Visor({ periodico, onClose }: { periodico: Periodico; onClose: () => vo
   );
 }
 
+// Crear el periódico con un botón (gasta créditos de la API de Claude). De momento, apagado:
+// se copia el prompt a mano. Para encenderlo, true y ANTHROPIC_API_KEY en Vercel.
+const IMPRENTA_AUTOMATICA = false;
+
 // Los otros números del archivo, sin las fotos en base64, como referencia de tono y estilo
 const sinFotos = (html: string) => html.replace(/data:[a-z/+.-]+;base64,[A-Za-z0-9+/=]+/gi, "data:,");
 
@@ -259,7 +263,9 @@ function Redaccion({ league, juego, anteriores, onSubido, onAbrir }: {
       <div>
         <h2 className="text-lg font-semibold">✍️ Redacción</h2>
         <p className="text-sm text-muted">
-          Elige el día y dale al botón: El Napicol se escribe solo con los resultados, piscinas y clasificación de ese día, con la misma estética y el mismo tono que los números anteriores.
+          {IMPRENTA_AUTOMATICA
+            ? "Elige el día y dale al botón: El Napicol se escribe solo con los resultados, piscinas y clasificación de ese día, con la misma estética y el mismo tono que los números anteriores."
+            : "Elige el día, añade comentarios si queréis y copia el prompt. Pégalo en Claude, descarga el HTML que te dé y súbelo aquí."}
         </p>
       </div>
 
@@ -287,38 +293,42 @@ function Redaccion({ league, juego, anteriores, onSubido, onAbrir }: {
               className="mt-1 w-full"
             />
           </label>
-          <button
-            onClick={crear}
-            disabled={!prompt || !plantilla || !permiso.puede || imprenta?.fase === "escribiendo"}
-            className="w-full rounded-2xl bg-gold py-3.5 text-lg font-bold text-felt disabled:opacity-50"
-          >
-            {imprenta?.fase === "escribiendo" ? "🗞️ Imprimiendo…" : "📰 Crear el periódico del día"}
-          </button>
-          {imprenta?.fase === "escribiendo" && (
-            <p className="animate-pulse text-center text-sm text-muted">
-              Las rotativas están en marcha ({imprenta.kb} KB). Tarda un par de minutos; no cierres esta pantalla.
-            </p>
-          )}
-          {imprenta?.fase === "hecho" && imprenta.id && (
-            <div className="space-y-2 rounded-xl border border-gold/60 bg-gold/10 p-3 text-center">
-              <p className="font-semibold">¡Número publicado en la hemeroteca!</p>
-              <button onClick={() => onAbrir(imprenta.id!)} className="rounded-full bg-gold px-4 py-1.5 font-semibold text-felt">Leerlo</button>
-            </div>
-          )}
-          {imprenta?.fase === "error" && (
-            <p className="rounded-xl border border-red/60 p-3 text-center text-sm text-red">No ha salido: {imprenta.msg}. Prueba otra vez.</p>
+          {IMPRENTA_AUTOMATICA && (
+            <>
+              <button
+                onClick={crear}
+                disabled={!prompt || !plantilla || !permiso.puede || imprenta?.fase === "escribiendo"}
+                className="w-full rounded-2xl bg-gold py-3.5 text-lg font-bold text-felt disabled:opacity-50"
+              >
+                {imprenta?.fase === "escribiendo" ? "🗞️ Imprimiendo…" : "📰 Crear el periódico del día"}
+              </button>
+              {imprenta?.fase === "escribiendo" && (
+                <p className="animate-pulse text-center text-sm text-muted">
+                  Las rotativas están en marcha ({imprenta.kb} KB). Tarda un par de minutos; no cierres esta pantalla.
+                </p>
+              )}
+              {imprenta?.fase === "hecho" && imprenta.id && (
+                <div className="space-y-2 rounded-xl border border-gold/60 bg-gold/10 p-3 text-center">
+                  <p className="font-semibold">¡Número publicado en la hemeroteca!</p>
+                  <button onClick={() => onAbrir(imprenta.id!)} className="rounded-full bg-gold px-4 py-1.5 font-semibold text-felt">Leerlo</button>
+                </div>
+              )}
+              {imprenta?.fase === "error" && (
+                <p className="rounded-xl border border-red/60 p-3 text-center text-sm text-red">No ha salido: {imprenta.msg}. Prueba otra vez.</p>
+              )}
+            </>
           )}
         </div>
 
-        <details className="rounded-xl border border-dashed border-line p-3 text-sm">
-          <summary className="cursor-pointer text-muted">A mano: copiar el prompt o subir un HTML</summary>
+        <details open={!IMPRENTA_AUTOMATICA} className="rounded-xl border border-dashed border-line p-3 text-sm">
+          <summary className="cursor-pointer text-muted">{IMPRENTA_AUTOMATICA ? "A mano: copiar el prompt o subir un HTML" : "Copiar el prompt y subir el HTML"}</summary>
           <div className="mt-3 space-y-3">
             <label className="flex items-center gap-2 text-sm text-muted">
               <input type="checkbox" checked={conPlantilla} onChange={(e) => setConPlantilla(e.target.checked)} />
               Incluir el último número como plantilla de diseño
             </label>
             <div className="flex flex-wrap gap-2">
-              <button onClick={copiar} disabled={!prompt} className="rounded-full border border-line px-4 py-2 font-semibold text-ink disabled:opacity-50">
+              <button onClick={copiar} disabled={!prompt} className="rounded-full bg-gold px-4 py-2 font-semibold text-felt disabled:opacity-50">
                 {copiado ? "¡Copiado!" : "📋 Copiar prompt"}
               </button>
               <button onClick={() => setVerPrompt((v) => !v)} className="rounded-full border border-line px-4 py-2 text-sm text-muted">

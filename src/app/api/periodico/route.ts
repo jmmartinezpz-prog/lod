@@ -13,6 +13,8 @@ Pon en <title> "El Napicol · " seguido del titular principal.`;
 // Genera el periódico del día con Claude y lo guarda en la hemeroteca.
 // Devuelve el HTML en streaming para ir enseñando el progreso.
 export async function POST(req: Request) {
+  // Apagado de momento para no gastar créditos (ver IMPRENTA_AUTOMATICA en la página de Prensa)
+  if (process.env.IMPRENTA_AUTOMATICA !== "1") return new Response("La imprenta automática está apagada", { status: 503 });
   if (!process.env.ANTHROPIC_API_KEY) return new Response("Falta ANTHROPIC_API_KEY en Vercel", { status: 500 });
 
   // Solo con llave o cuenta de admin: si no, cualquiera gastaría los créditos
