@@ -594,19 +594,21 @@ type Sancion = { player_id: string; points: number; reason: string | null; jorna
 function sancionRecords(sanciones: Sancion[], series: { key: string; name: string }[]) {
   const name = new Map(series.map((s) => [s.key, s.name]));
   const out: { icon: string; title: string; who: string; value: string }[] = [];
-  const top = (rows: Sancion[], icon: string, title: string, unit: (n: number, pts: number) => string) => {
+  // por: "pts" = más puntos perdidos en sanciones; "n" = más veces
+  const top = (rows: Sancion[], por: "n" | "pts", icon: string, title: string, unit: (n: number, pts: number) => string) => {
     const by = new Map<string, { n: number; pts: number }>();
     for (const r of rows) {
       const cur = by.get(r.player_id) ?? { n: 0, pts: 0 };
       by.set(r.player_id, { n: cur.n + 1, pts: cur.pts + r.points });
     }
-    const max = Math.max(0, ...[...by.values()].map((v) => v.n));
+    const peso = (v: { n: number; pts: number }) => (por === "n" ? v.n : -v.pts);
+    const max = Math.max(0, ...[...by.values()].map(peso));
     if (!max) return;
-    const who = [...by].filter(([, v]) => v.n === max);
-    out.push({ icon, title, who: who.map(([k]) => name.get(k) ?? "🃏 Wildcard").join(" y "), value: unit(max, who[0][1].pts) });
+    const who = [...by].filter(([, v]) => peso(v) === max);
+    out.push({ icon, title, who: who.map(([k]) => name.get(k) ?? "🃏 Wildcard").join(" y "), value: unit(who[0][1].n, who[0][1].pts) });
   };
-  top(sanciones, "⚖️", "Más sancionado", (n, pts) => `${n} ${n === 1 ? "sanción" : "sanciones"} · ${pts} pts`);
-  top(sanciones.filter((s) => /tarde/i.test(s.reason ?? "")), "⏰", "Más llegadas tarde", (n) => `${n} ${n === 1 ? "vez" : "veces"}`);
+  top(sanciones, "pts", "⚖️", "Más sancionado (en puntos)", (n, pts) => `${pts} pts en ${n} ${n === 1 ? "sanción" : "sanciones"}`);
+  top(sanciones.filter((s) => /tarde/i.test(s.reason ?? "")), "n", "⏰", "Más llegadas tarde", (n) => `${n} ${n === 1 ? "vez" : "veces"}`);
   return out;
 }
 
