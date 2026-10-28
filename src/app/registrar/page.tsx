@@ -14,7 +14,7 @@ type PendingEvent = { player_id: string; target_player_id: string; kind: LeagueE
 
 export default function Registrar() {
   return (
-    <AdminGate>
+    <AdminGate soloAdmin>
       <Form />
     </AdminGate>
   );
@@ -101,7 +101,10 @@ function Form() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-black">Registrar jornada</h1>
+      <h1 className="text-2xl font-black">Corregir: jornada a mano</h1>
+      <p className="rounded-lg border border-gold/50 bg-gold/10 p-3 text-sm">
+        Las jornadas se crean solas al terminar cada partida del modo juego. Esto es solo para arreglar algo que haya salido mal.
+      </p>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="text-sm">

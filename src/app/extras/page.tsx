@@ -5,6 +5,7 @@ import AdminGate from "@/components/AdminGate";
 import { Status } from "@/components/Status";
 import { useLeague } from "@/lib/useLeague";
 import { supabase } from "@/lib/supabase";
+import { usePermiso } from "@/lib/llave";
 
 type Kind = "sancion" | "bonus" | "alta" | "piscina" | "autopiscina" | "historia";
 const LABEL: Record<string, string> = {
@@ -22,6 +23,8 @@ export default function Extras() {
 
 function Panel() {
   const { players, adjustments, events, loading, error } = useLeague();
+  const { admin } = usePermiso();
+  const kinds: Kind[] = admin ? ["sancion", "bonus", "alta", "piscina", "autopiscina", "historia"] : ["sancion"];
   const [player, setPlayer] = useState("");
   const [kind, setKind] = useState<Kind>("sancion");
   const [value, setValue] = useState(1);
@@ -65,14 +68,17 @@ function Panel() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-black">Sanciones y extras</h1>
+      <div>
+        <h1 className="text-2xl font-black">{admin ? "Sanciones y extras" : "⚖️ Sanciones"}</h1>
+        <p className="text-sm text-muted">Las jornadas, vidas y piscinas salen solas del modo juego.</p>
+      </div>
       <div className="space-y-3 rounded-xl border border-line bg-card p-4">
         <select value={player} onChange={(e) => setPlayer(e.target.value)}>
           {players.map((p) => <option key={p.id} value={p.id}>{p.nickname}</option>)}
         </select>
         <div className="grid grid-cols-2 gap-3">
           <select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
-            {(["sancion", "bonus", "alta", "piscina", "autopiscina", "historia"] as Kind[]).map((k) => (
+            {kinds.map((k) => (
               <option key={k} value={k}>{LABEL[k]}</option>
             ))}
           </select>
@@ -100,7 +106,9 @@ function Panel() {
               {byId.get(l.player)} <span className="text-muted">{l.text}</span>
             </span>
             <span className="tabular">{l.table === "adjustments" && l.v > 0 ? "+" : ""}{l.v}</span>
-            <button onClick={() => remove(l.table, l.id)} className="px-1 text-red">✕</button>
+            {(admin || l.kind === "sancion") && (
+              <button onClick={() => remove(l.table, l.id)} className="px-1 text-red">✕</button>
+            )}
           </li>
         ))}
       </ul>

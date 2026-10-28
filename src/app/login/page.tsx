@@ -24,14 +24,14 @@ export default function Login() {
     });
     setBusy(false);
     if (error) setError(error.message);
-    else router.push("/registrar");
+    else router.push("/");
   }
 
   return (
     <div className="mx-auto max-w-sm space-y-8 pt-6">
       <MeterLlave
         permiso={permiso}
-        que="apuntar jornadas, partidas y periódicos"
+        que="jugar partidas, poner sanciones y subir periódicos"
       />
       {permiso.puede && !permiso.cargando && (
         <div className="space-y-2 rounded-2xl border border-line bg-card p-4 text-center">

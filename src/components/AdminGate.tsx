@@ -20,7 +20,7 @@ export default function AdminGate({ children, soloAdmin = false }: { children: R
     );
   return (
     <div className="mx-auto max-w-md py-6">
-      <MeterLlave permiso={permiso} que="apuntar" />
+      <MeterLlave permiso={permiso} que="poner sanciones" />
     </div>
   );
 }

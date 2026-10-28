@@ -14,10 +14,7 @@ const tabs = [
   { href: "/estadisticas", label: "Stats", icon: "📊" },
   { href: "/prensa", label: "Prensa", icon: "📰" },
 ];
-const editLinks = [
-  { href: "/registrar", label: "+ Jornada" },
-  { href: "/extras", label: "Extras" },
-];
+const editLinks = [{ href: "/extras", label: "⚖️ Sanciones" }];
 
 export default function Nav() {
   const path = usePathname();

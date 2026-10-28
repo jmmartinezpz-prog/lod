@@ -237,7 +237,7 @@ export default function Estadisticas() {
             <Eliminaciones r={shown} />
             {permiso.puede && <button
               onClick={async () => {
-                if (!confirm("¿Anular esta partida?\n\nDesaparecerá de todas las estadísticas (para pruebas o errores).")) return;
+                if (!confirm("¿Anular esta partida?\n\nDesaparecerá de todas las estadísticas y se borrará su jornada de liga (para pruebas o errores).")) return;
                 const error = await cancelPartida(shown.partida.id);
                 if (error) alert(`No se ha podido anular: ${error}`);
                 else setSelected(null);

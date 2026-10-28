@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Status } from "@/components/Status";
 import { useLeague } from "@/lib/useLeague";
-import { cancelGame, finalStandings, GAME_COLORS, heal, hit, newGame, syncGame, type Game, type Seat } from "@/lib/partidas";
+import { cancelGame, cerrarPartida, finalStandings, GAME_COLORS, heal, hit, newGame, syncGame, type Game, type Seat } from "@/lib/partidas";
 import type { JornadaKind } from "@/lib/types";
 import { playerLabel } from "@/lib/history";
 import { Starred } from "@/components/Status";
@@ -111,6 +111,7 @@ function FitName({ name, max, className = "" }: { name: string; max: number; cla
 export default function Juego() {
   const [game, setGame] = useState<Game | null>(null);
   const [summary, setSummary] = useState<Game | null>(null);
+  const [liga, setLiga] = useState<Liga | null>(null);
 
   useEffect(() => {
     try {
@@ -141,14 +142,16 @@ export default function Juego() {
 
   return (
     <>
-      {game ? <Board game={game} update={update} onFinished={setSummary} /> : <Setup onStart={(g) => update(() => g)} />}
-      {summary && <Summary game={summary} onClose={() => setSummary(null)} />}
+      {game ? <Board game={game} update={update} onFinished={(g, l) => { setSummary(g); setLiga(l); }} /> : <Setup onStart={(g) => update(() => g)} />}
+      {summary && <Summary game={summary} liga={liga} onRetry={async () => setLiga(await cerrarPartida(summary.id))} onClose={() => setSummary(null)} />}
     </>
   );
 }
 
+type Liga = { jornada: number | null; error: string | null };
+
 // Resumen al cerrar una partida: puestos y puntos de liga según la tabla normal o de sobrantes
-function Summary({ game, onClose }: { game: Game; onClose: () => void }) {
+function Summary({ game, liga, onRetry, onClose }: { game: Game; liga: Liga | null; onRetry: () => void; onClose: () => void }) {
   const rows = finalStandings(game);
   const medal = ["🥇", "🥈", "🥉"];
   return (
@@ -178,6 +181,14 @@ function Summary({ game, onClose }: { game: Game; onClose: () => void }) {
             </li>
           ))}
         </ol>
+        {liga?.jornada ? (
+          <p className="rounded-2xl bg-gold/15 p-3 text-center font-semibold text-gold">📒 Guardada en la liga como J{liga.jornada}</p>
+        ) : (
+          <div className="space-y-2 rounded-2xl border border-red/60 p-3 text-center text-sm">
+            <p className="text-red">No se ha podido pasar a la liga{liga?.error ? `: ${liga.error}` : ""}</p>
+            <button onClick={onRetry} className="rounded-full bg-red px-4 py-1.5 font-semibold text-white">Reintentar</button>
+          </div>
+        )}
         <button onClick={onClose} className="w-full rounded-2xl bg-gold py-3.5 text-lg font-bold text-felt">Cerrar</button>
       </div>
     </div>
@@ -465,7 +476,7 @@ function ColorPicker({ name, current, owner, onPick, onClose }: {
   );
 }
 
-function Board({ game, update, onFinished }: { game: Game; update: Update; onFinished: (g: Game) => void }) {
+function Board({ game, update, onFinished }: { game: Game; update: Update; onFinished: (g: Game, liga: Liga) => void }) {
   const rows = useRows(game.seats.length);
   const [deltas, setDeltas] = useState<Record<string, number>>({});
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -519,9 +530,10 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
   async function finish(next: () => Game | null) {
     const ended = { ...game, endedAt: new Date().toISOString(), synced: false };
     const res = await syncGame(ended);
-    if (res.error && !confirm(`No se ha podido guardar la partida (${res.error}).\n\n¿Salir igual? Se perderá de las estadísticas.`)) return;
+    if (res.error && !confirm(`No se ha podido guardar la partida (${res.error}).\n\n¿Salir igual? Se perderá de la liga y de las estadísticas.`)) return;
+    const liga = res.error ? { jornada: null, error: res.error } : await cerrarPartida(ended.id);
     update(next);
-    onFinished(ended);
+    onFinished(ended, liga);
   }
 
   function rematch() {
@@ -673,7 +685,7 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
             <p className="pb-1 text-center text-lg font-semibold text-ink">¿Qué hacemos con la partida?</p>
             <button onClick={exit} className="w-full rounded-2xl bg-gold py-3.5 font-bold text-felt">
               🏁 Terminar y guardar
-              <span className="block text-xs font-medium opacity-80">Cuenta en las estadísticas y sale el resumen</span>
+              <span className="block text-xs font-medium opacity-80">Se apunta sola como jornada de liga y sale el resumen</span>
             </button>
             <button onClick={cancel} className="w-full rounded-2xl border border-red/60 py-3.5 font-semibold text-red">
               🗑 Cancelar partida

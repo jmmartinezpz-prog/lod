@@ -11,7 +11,7 @@ const ICON = { piscina: "🏊", autopiscina: "🤦", historia: "📜" } as const
 
 export default function Jornadas() {
   const { dias, jornadas, results, players, adjustments, events, loading, error } = useLeague();
-  const { puede } = usePermiso();
+  const { admin } = usePermiso();
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const byId = new Map(players.map((p) => [p.id, p]));
   const name = (id: string | null) => (id ? byId.get(id)?.nickname ?? "?" : "?");
@@ -84,7 +84,7 @@ export default function Jornadas() {
               ))}
             </div>
 
-            {puede && dia && (
+            {admin && dia && (
               <label className="flex items-center gap-2 px-4 pb-3 text-xs text-muted">
                 Fecha del día
                 <input type="date" className="!w-auto !py-1" defaultValue={dia.played_on ?? ""} onBlur={(e) => setDate(dia.id, e.target.value)} />
@@ -137,7 +137,7 @@ export default function Jornadas() {
                         </ul>
                       )}
                       {j.notes && <p className="mt-2 text-xs italic text-muted">{j.notes}</p>}
-                      {puede && (
+                      {admin && (
                         <button onClick={() => removeJornada(j.id, j.number)} className="mt-2 text-xs text-red">
                           Borrar jornada
                         </button>

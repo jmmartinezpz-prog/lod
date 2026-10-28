@@ -158,6 +158,13 @@ export async function cancelGame(g: Game): Promise<string | null> {
   return error?.message ?? null;
 }
 
+// Pasa la partida terminada a la liga: la base de datos crea su jornada con puntos y piscinas
+export async function cerrarPartida(id: string): Promise<{ jornada: number | null; error: string | null }> {
+  if (!supabaseConfigured) return { jornada: null, error: "Supabase no configurado" };
+  const { data, error } = await supabase.rpc("cerrar_partida", { p_id: id });
+  return { jornada: (data as number | null) ?? null, error: error?.message ?? null };
+}
+
 export async function syncGame(g: Game): Promise<{ header: boolean; sent: string[]; error: string | null }> {
   if (!supabaseConfigured) return { header: false, sent: [], error: "Supabase no configurado" };
   if (!g.synced) {

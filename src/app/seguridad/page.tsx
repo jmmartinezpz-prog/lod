@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import AdminGate from "@/components/AdminGate";
 import { usePermiso } from "@/lib/llave";
 import { usePartidas } from "@/lib/partidas";
@@ -49,7 +50,10 @@ function Panel() {
     return <p className="py-10 text-center text-muted">Esta cuenta no está en la lista de admins.</p>;
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">🛡 Seguridad</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="mr-auto text-2xl font-bold">🛡 Seguridad</h1>
+        <Link href="/registrar" className="rounded-full border border-line px-3 py-1.5 text-xs text-muted">Corregir: jornada a mano</Link>
+      </div>
       <Llaves />
       <Anuladas />
       <Registro />
@@ -94,7 +98,7 @@ function Llaves() {
     <section className="space-y-3 rounded-2xl border border-line bg-card p-4">
       <div>
         <h2 className="font-bold">🔑 Llaves</h2>
-        <p className="text-sm text-muted">Una por persona. Con ella su móvil puede apuntarlo todo: jornadas, extras, partidas y periódicos. Este panel solo lo ves tú.</p>
+        <p className="text-sm text-muted">Una por persona. Con ella su móvil puede jugar partidas en el modo juego (que crean la jornada de liga solas), anularlas, poner sanciones y subir periódicos. Este panel solo lo ves tú.</p>
       </div>
 
       {nueva && (
