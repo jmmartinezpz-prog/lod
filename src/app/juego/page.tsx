@@ -18,6 +18,63 @@ type Picker = { mode: "lanzar" | "recibir"; seat: Seat };
 const tileBg = (color: string) =>
   `radial-gradient(circle at 30% 20%, color-mix(in srgb, ${color} 85%, white), ${color} 45%, color-mix(in srgb, ${color} 60%, black))`;
 
+const ORDER_KEY = "lod-orden-asientos"; // cómo nos sentamos la última vez
+
+function readOrder(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(ORDER_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+function saveOrder(ids: string[]) {
+  try {
+    localStorage.setItem(ORDER_KEY, JSON.stringify(ids));
+  } catch {}
+}
+
+function moveTo<T>(list: T[], from: number, to: number) {
+  const next = [...list];
+  next.splice(to, 0, ...next.splice(from, 1));
+  return next;
+}
+
+// Arrastrar cartas para recolocarlas: lo que hay bajo el dedo (data-drag-key) cambia de sitio al vuelo
+function useDragOrder(onMove: (dragged: string, over: string) => void) {
+  const [dragging, setDragging] = useState<string | null>(null);
+  const move = useRef(onMove);
+  useEffect(() => {
+    move.current = onMove;
+  });
+
+  useEffect(() => {
+    if (!dragging) return;
+    function onPointerMove(e: PointerEvent) {
+      const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-drag-key]");
+      const over = el?.dataset.dragKey;
+      if (over && over !== dragging) move.current(dragging!, over);
+    }
+    const stop = () => setDragging(null);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+  }, [dragging]);
+
+  const handle = (key: string) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      e.preventDefault();
+      setDragging(key);
+    },
+    style: { touchAction: "none" } as React.CSSProperties,
+  });
+  return { dragging, handle };
+}
+
 // Parte el nombre en 1 o 2 líneas equilibradas y calcula una letra que quepa entera en la carta.
 function fitName(name: string, maxCqmin: number, widthCqw = 84) {
   const words = name.split(" ");
@@ -134,6 +191,18 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
   const [painting, setPainting] = useState<string | null>(null); // jugador eligiendo color
   const [wildcards, setWildcards] = useState<{ id: string; name: string }[]>([]);
   const [wildName, setWildName] = useState("");
+  const [orden, setOrden] = useState<string[]>([]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOrden(readOrder());
+  }, []);
+  // El orden actual es el de las cartas en pantalla
+  const drag = useDragOrder((dragged, over) => {
+    const ids = [...document.querySelectorAll<HTMLElement>("[data-drag-key]")].map((el) => el.dataset.dragKey!);
+    const next = moveTo(ids, ids.indexOf(dragged), ids.indexOf(over));
+    setOrden(next);
+    saveOrder(next.filter((id) => !id.startsWith("wc-")));
+  });
 
   if (loading || error) return <Status loading={loading} error={error} />;
 
@@ -141,7 +210,12 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
     .filter((p) => p.active && !p.is_wildcard)
     .sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99) || a.nickname.localeCompare(b.nickname))
     .map((p) => ({ id: p.id, name: playerLabel(p) }));
-  const candidates = [...regulars, ...wildcards];
+  // Como nos sentamos la última vez; los que no estaban, detrás
+  const pos = (id: string) => {
+    const i = orden.indexOf(id);
+    return i < 0 ? 999 : i;
+  };
+  const candidates = [...regulars, ...wildcards].map((c, i) => ({ c, i })).sort((a, b) => pos(a.c.id) - pos(b.c.id) || a.i - b.i).map(({ c }) => c);
   const seated = candidates.filter((c) => !excluded.has(c.id));
   const assigned = assignColors(
     [...seated, ...candidates.filter((c) => excluded.has(c.id))].map((c) => c.id),
@@ -236,7 +310,7 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
       </section>
 
       <section className="space-y-3">
-        <p className="text-sm text-muted">Jugadores · toca para quitar, 🎨 para cambiar color</p>
+        <p className="text-sm text-muted">Jugadores · toca para quitar, 🎨 para cambiar color, ⠿ arrastra para ponerlos en el orden de la mesa</p>
         <div className="grid grid-cols-2 gap-2.5">
           {candidates.map((c) => {
             const on = !excluded.has(c.id);
@@ -244,7 +318,8 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
             return (
               <div
                 key={c.id}
-                className={`relative h-24 overflow-hidden rounded-2xl shadow-lg transition ${on ? "" : "opacity-30 grayscale"}`}
+                data-drag-key={c.id}
+                className={`relative h-24 overflow-hidden rounded-2xl shadow-lg transition ${on ? "" : "opacity-30 grayscale"} ${drag.dragging === c.id ? "scale-95 ring-4 ring-gold" : ""}`}
                 style={{ background: tileBg(color(c.id)), containerType: "size" }}
               >
                 <button onClick={() => toggle(c.id)} className="flex h-full w-full items-end px-3 pb-2.5 pt-10 text-white">
@@ -257,11 +332,18 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
                 >
                   🎨
                 </button>
+                <button
+                  {...drag.handle(c.id)}
+                  aria-label={`Mover a ${c.name}`}
+                  className="absolute left-2 top-2 flex h-8 w-8 cursor-grab items-center justify-center rounded-full bg-black/25 text-lg text-white"
+                >
+                  ⠿
+                </button>
                 {isWild && (
                   <button
                     onClick={() => setWildcards((cur) => cur.filter((w) => w.id !== c.id))}
                     aria-label="Quitar wildcard"
-                    className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/25 text-sm text-white"
+                    className="absolute left-11 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/25 text-sm text-white"
                   >
                     ✕
                   </button>
@@ -385,6 +467,16 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
   const [picker, setPicker] = useState<Picker | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
+  const [ordering, setOrdering] = useState(false); // recolocar cartas según cómo estamos sentados
+  const drag = useDragOrder((dragged, over) =>
+    update((g) => {
+      if (!g) return g;
+      const ids = g.seats.map((s) => s.id);
+      const seats = moveTo(g.seats, ids.indexOf(dragged), ids.indexOf(over));
+      saveOrder(seats.flatMap((s) => (s.playerId ? [s.playerId] : [])));
+      return { ...g, seats };
+    }),
+  );
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const sync = useSync(game, update);
   useWakeLock();
@@ -468,7 +560,8 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
             return (
               <div
                 key={s.id}
-                className={`relative flex min-w-0 flex-1 overflow-hidden rounded-2xl shadow-[inset_0_0_40px_rgba(0,0,0,.3)] ${zero ? "ring-4 ring-inset ring-white/70" : ""}`}
+                data-drag-key={s.id}
+                className={`relative flex min-w-0 flex-1 overflow-hidden rounded-2xl shadow-[inset_0_0_40px_rgba(0,0,0,.3)] ${zero ? "ring-4 ring-inset ring-white/70" : ""} ${drag.dragging === s.id ? "scale-95 opacity-80" : ""}`}
                 style={{ background: tileBg(s.color), containerType: "size" }}
               >
                 {bust && <div className="absolute inset-0 bg-[#111]/85" />}
@@ -520,6 +613,16 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
                   </div>
                 </div>
 
+                {ordering && (
+                  <div
+                    {...drag.handle(s.id)}
+                    className="absolute inset-0 z-10 flex cursor-grab flex-col items-center justify-center gap-[2cqmin] border-4 border-dashed border-white/70 bg-black/35 text-white"
+                  >
+                    <span className="text-[22cqmin] leading-none">✋</span>
+                    <FitName name={s.name} max={10} className="w-full px-[6cqmin] font-semibold" />
+                  </div>
+                )}
+
                 {d !== undefined && (
                   <span className={`pointer-events-none absolute right-[8cqmin] top-[30%] rounded-full px-[3cqmin] text-[9cqmin] font-bold text-white ${d > 0 ? "bg-white/30" : "bg-black/40"}`}>
                     {d > 0 ? `+${d}` : `−${-d}`}
@@ -541,6 +644,13 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
           ) : (
             <span className="px-1 text-xs text-white/70">{sync.pending ? `⏳ ${sync.pending}` : "☁️ ✓"}</span>
           )}
+          <button
+            onClick={() => setOrdering((o) => !o)}
+            aria-label="Ordenar cartas"
+            className={`h-9 rounded-full px-2.5 text-sm font-semibold ${ordering ? "bg-gold text-black" : ""}`}
+          >
+            {ordering ? "✓ Listo" : "⇅"}
+          </button>
           <button onClick={rematch} aria-label="Nueva partida" className="h-9 w-9 rounded-full text-lg">↺</button>
           <button onClick={() => setMenu(true)} aria-label="Terminar o cancelar" className="h-9 w-9 rounded-full text-lg">✕</button>
         </div>

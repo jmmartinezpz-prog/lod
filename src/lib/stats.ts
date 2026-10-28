@@ -152,6 +152,8 @@ export type PlayerStats = {
   jornadas: number;
   jornadaWins: number;
   podios: number;
+  puestos: number[]; // veces en cada puesto de la jornada: [1º, 2º, 3º, …]
+  ultimos: number; // veces último de su jornada
   avgPos: number | null;
   ligaPts: number;
   jornadaStreak: number;
@@ -184,6 +186,8 @@ export function playerStats(opts: {
 
   const jornadaById = new Map(jornadas.filter((j) => inRange(j.played_on, range)).map((j) => [j.id, j]));
   const jornadaDay = new Map(jornadas.map((j) => [j.id, j.played_on as string | null]));
+  const porJornada = new Map<string, number>(); // jugadores en cada jornada (para saber quién fue último)
+  for (const r of results) porJornada.set(r.jornada_id, (porJornada.get(r.jornada_id) ?? 0) + 1);
   const myResults = results
     .filter((r) => jornadaById.has(r.jornada_id))
     .sort((a, b) => jornadaById.get(a.jornada_id)!.number - jornadaById.get(b.jornada_id)!.number);
@@ -232,6 +236,12 @@ export function playerStats(opts: {
       jornadas: res.length,
       jornadaWins: res.filter((r) => r.position === 1).length,
       podios: res.filter((r) => r.position <= 3).length,
+      puestos: res.reduce<number[]>((acc, r) => {
+        while (acc.length < r.position) acc.push(0);
+        acc[r.position - 1] += 1;
+        return acc;
+      }, []),
+      ultimos: res.filter((r) => r.position > 1 && r.position === porJornada.get(r.jornada_id)).length,
       avgPos: avg(res.map((r) => r.position)),
       ligaPts: res.reduce((t, r) => t + r.points, 0),
       jornadaStreak: liga.current,
@@ -245,6 +255,33 @@ export function playerStats(opts: {
       pisBalance: sum("piscina") + thrown - (recibidas + received),
     };
   });
+}
+
+// Cara a cara en finales: en cada jornada, la final la juegan el 1º y el 2º
+export type Final = { a: PlayerStats; b: PlayerStats; aWins: number; bWins: number; total: number; last: number };
+
+export function finales(stats: PlayerStats[], jornadas: Jornada[], results: Result[], range: Range): Final[] {
+  const byKey = new Map(stats.map((s) => [s.key, s]));
+  const group = (id: string) => (byKey.has(id) ? id : WILDCARD);
+  const out = new Map<string, Final>();
+  for (const j of jornadas) {
+    if (!inRange(j.played_on, range)) continue;
+    const rs = results.filter((r) => r.jornada_id === j.id);
+    const w = rs.find((r) => r.position === 1);
+    const l = rs.find((r) => r.position === 2);
+    if (!w || !l) continue;
+    const [kw, kl] = [group(w.player_id), group(l.player_id)];
+    if (kw === kl || !byKey.has(kw) || !byKey.has(kl)) continue;
+    const [ka, kb] = [kw, kl].sort();
+    const id = `${ka}|${kb}`;
+    const f = out.get(id) ?? { a: byKey.get(ka)!, b: byKey.get(kb)!, aWins: 0, bWins: 0, total: 0, last: 0 };
+    if (kw === ka) f.aWins += 1;
+    else f.bWins += 1;
+    f.total += 1;
+    f.last = Math.max(f.last, j.number);
+    out.set(id, f);
+  }
+  return [...out.values()].sort((x, y) => y.total - x.total || y.last - x.last);
 }
 
 const plural = (n: number) => `${n} ${n === 1 ? "vida" : "vidas"}`;

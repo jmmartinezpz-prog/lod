@@ -7,7 +7,7 @@ import { ProgressChart } from "@/components/ProgressChart";
 import { historyIn, leagueHistory, regularsOf } from "@/lib/history";
 import { useLeague } from "@/lib/useLeague";
 import { cancelPartida, usePartidas } from "@/lib/partidas";
-import { allSplashes, dayOf, inRange, leagueRecords, playerStats, records, resumir, type PlayerStats, type Range, type Resumen } from "@/lib/stats";
+import { allSplashes, dayOf, finales, type Final, inRange, leagueRecords, playerStats, records, resumir, type PlayerStats, type Range, type Resumen } from "@/lib/stats";
 
 type Preset = "todo" | "hoy" | "7" | "30" | "mes" | "fechas";
 const PRESETS: { id: Preset; label: string }[] = [
@@ -89,6 +89,7 @@ export default function Estadisticas() {
   const recs = [...leagueRecords(periodo), ...sancionRecords(sanciones, periodo.series), ...records(stats, terminadas)];
   const filtrando = Boolean(range.from || range.to);
   const sinFecha = league.jornadas.filter((j) => !j.played_on).length;
+  const fin = finales(stats, league.jornadas, league.results, range);
   const pairs = allSplashes(enRango, league.events, stats, range, league.jornadas);
   const jornadasEnRango = league.jornadas.filter((j) => inRange(j.played_on, range)).length;
   const sum = (pick: (s: PlayerStats) => number) => stats.reduce((t, s) => t + pick(s), 0);
@@ -160,7 +161,11 @@ export default function Estadisticas() {
         focus={focus ?? league.standings[0]?.player.id ?? null}
         onFocus={setFocus}
         sanciones={sanciones}
+        finales={fin}
       />
+
+      <Puestos stats={stats} />
+      <CaraACara finales={fin} />
 
       {/* Récords */}
       {recs.length > 0 && (
@@ -337,6 +342,8 @@ export default function Estadisticas() {
             ["Pts", (s) => s.ligaPts],
             ["🏆", (s) => s.jornadaWins],
             ["Podios", (s) => s.podios],
+            ...Array.from({ length: Math.max(0, ...stats.map((s) => s.puestos.length)) - 1 }, (_, i): [string, (s: PlayerStats) => number] => [`${i + 2}º`, (s) => s.puestos[i + 1] ?? 0]),
+            ["🏮 Último", (s) => s.ultimos],
             ["Puesto medio", (s) => fmt(s.avgPos)],
             ["🔥 Racha", (s) => s.jornadaStreak],
             ["Mejor racha", (s) => s.bestJornadaStreak],
@@ -536,13 +543,14 @@ function sancionRecords(sanciones: Sancion[], series: { key: string; name: strin
   return out;
 }
 
-function Individual({ history, stats, standings, focus, onFocus, sanciones }: {
+function Individual({ history, stats, standings, focus, onFocus, sanciones, finales }: {
   history: ReturnType<typeof leagueHistory>;
   stats: PlayerStats[];
   standings: { key: string; points: number }[];
   focus: string | null;
   onFocus: (key: string) => void;
   sanciones: Sancion[];
+  finales: Final[];
 }) {
   const who = history.series.find((s) => s.key === focus) ?? history.series[0];
   if (!who) return null;
@@ -579,6 +587,30 @@ function Individual({ history, stats, standings, focus, onFocus, sanciones }: {
         ["Racha de victorias", st?.jornadaStreak ?? 0],
         ["Mejor racha", st?.bestJornadaStreak ?? 0],
       ],
+    },
+    {
+      title: "🥇 Puestos en jornadas",
+      items: [
+        ...(st?.puestos ?? []).map((n, i): [string, string | number] => [`${i + 1}º`, n]),
+        ["🏮 Último", st?.ultimos ?? 0],
+      ],
+    },
+    {
+      title: "🤺 Finales (1º contra 2º)",
+      items: (() => {
+        const mias = finales.filter((f) => f.a.key === who.key || f.b.key === who.key);
+        if (!mias.length) return [["Sin finales", "–"]] as [string, string | number][];
+        const gan = mias.reduce((t, f) => t + (f.a.key === who.key ? f.aWins : f.bWins), 0);
+        const tot = mias.reduce((t, f) => t + f.total, 0);
+        return [
+          ["Jugadas", tot],
+          ["Ganadas · perdidas", `${gan} · ${tot - gan}`],
+          ...mias.map((f): [string, string | number] => {
+            const yo = f.a.key === who.key;
+            return [`vs ${(yo ? f.b : f.a).name}`, `${yo ? f.aWins : f.bWins}–${yo ? f.bWins : f.aWins}`];
+          }),
+        ];
+      })(),
     },
     {
       title: "🏊 Piscinas",
@@ -644,7 +676,7 @@ function Individual({ history, stats, standings, focus, onFocus, sanciones }: {
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {groups.map((g) => (
           <div key={g.title} className="rounded-xl bg-felt p-3">
             <p className="mb-2 text-sm font-semibold">{g.title}</p>
@@ -660,6 +692,76 @@ function Individual({ history, stats, standings, focus, onFocus, sanciones }: {
         ))}
       </div>
       <p className="mt-3 text-xs text-muted">Todo sigue el filtro de fechas. El liderato se mide con la clasificación acumulada de toda la liga en cada jornada del periodo.</p>
+    </Card>
+  );
+}
+
+// Cuántas veces ha quedado cada uno en cada puesto de las jornadas (más intenso = más veces)
+function Puestos({ stats }: { stats: PlayerStats[] }) {
+  const rows = stats.filter((s) => s.jornadas > 0).sort((a, b) => b.ligaPts - a.ligaPts);
+  if (!rows.length) return null;
+  const n = Math.max(...rows.map((s) => s.puestos.length));
+  const max = Math.max(1, ...rows.flatMap((s) => [...s.puestos, s.ultimos]));
+  const cell = (v: number) => ({ background: `color-mix(in srgb, var(--gold) ${Math.round((v / max) * 70)}%, var(--felt))` });
+  return (
+    <Card title="🎯 Puestos en las jornadas">
+      <div className="-mx-4 overflow-x-auto px-4">
+        <table className="w-full min-w-[34rem] border-separate border-spacing-1 text-sm">
+          <thead>
+            <tr className="text-xs text-muted">
+              <th className="text-left font-normal">Jugador</th>
+              {Array.from({ length: n }, (_, i) => (
+                <th key={i} className="font-normal">{i === 0 ? "🏆 1º" : `${i + 1}º`}</th>
+              ))}
+              <th className="font-normal">🏮 Último</th>
+              <th className="font-normal">J</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((s) => (
+              <tr key={s.key}>
+                <td className="pr-2"><Name s={s} /></td>
+                {Array.from({ length: n }, (_, i) => {
+                  const v = s.puestos[i] ?? 0;
+                  return (
+                    <td key={i} title={`${v} de ${s.jornadas} (${Math.round((v / s.jornadas) * 100)}%)`} className="tabular rounded-md py-1.5 text-center font-semibold" style={cell(v)}>
+                      {v}
+                    </td>
+                  );
+                })}
+                <td className="tabular rounded-md py-1.5 text-center font-semibold" style={cell(s.ultimos)}>{s.ultimos}</td>
+                <td className="tabular text-center text-muted">{s.jornadas}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-xs text-muted">Último = último de su jornada (con wildcards puede ser el 6º). Pasa el dedo o el ratón por una celda para ver el %.</p>
+    </Card>
+  );
+}
+
+// Finales = jornadas en las que los dos se jugaron la victoria (1º y 2º)
+function CaraACara({ finales }: { finales: Final[] }) {
+  if (!finales.length) return null;
+  return (
+    <Card title="🤺 Cara a cara en finales">
+      <ul className="grid gap-2 lg:grid-cols-2">
+        {finales.map((f) => (
+          <li key={`${f.a.key}|${f.b.key}`} className="rounded-xl bg-felt p-3">
+            <div className="flex items-center gap-2 text-sm">
+              <span className={`flex-1 leading-tight ${f.aWins > f.bWins ? "font-bold" : "text-muted"}`}><Starred name={f.a.name} /></span>
+              <span className="tabular text-lg font-bold">{f.aWins}<span className="mx-1 text-muted">–</span>{f.bWins}</span>
+              <span className={`flex-1 text-right leading-tight ${f.bWins > f.aWins ? "font-bold" : "text-muted"}`}><Starred name={f.b.name} /></span>
+            </div>
+            <div className="mt-2 flex h-2 gap-0.5 overflow-hidden rounded-full">
+              {f.aWins > 0 && <span style={{ flex: f.aWins, background: f.a.color }} />}
+              {f.bWins > 0 && <span style={{ flex: f.bWins, background: f.b.color }} />}
+            </div>
+            <p className="mt-1 text-center text-xs text-muted">{f.total} {f.total === 1 ? "final" : "finales"} · la última en la J{f.last}</p>
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }
