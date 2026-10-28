@@ -363,6 +363,11 @@ export default function Estadisticas() {
               ["🏊 Lanzadas", (s) => s.thrown],
               ["💧 Recibidas", (s) => s.received],
               ["0️⃣ Victorias en vida cero", (s) => s.zeroWins],
+            ["❤️ Vidas al ganar (media)", (s) => fmt(s.vidasAlGanar)],
+            ["💪 Victoria más holgada", (s) => s.maxVidasGanando ?? "–"],
+            ["😅 Por la mínima", (s) => s.porLaMinima],
+            ["🩸 Vidas perdidas / partida", (s) => fmt(s.vidasPorPartida)],
+            ["🤦 Autopiscinas", (s) => s.autosJuego],
               ["💚 Recuperadas", (s) => s.gained],
             ]}
           />
@@ -702,6 +707,10 @@ function Individual({ history, stats, standings, focus, onFocus, sanciones, fina
         ["Victorias", st?.wins ?? 0],
         ["Puntos", st?.juegoPts ?? 0],
         ["Primero en caer", st?.firstOut ?? 0],
+        ["❤️ Vidas al ganar (media)", fmt(st?.vidasAlGanar ?? null)],
+        ["💪 Victoria más holgada", st?.maxVidasGanando != null ? `${st.maxVidasGanando} vidas` : "–"],
+        ["😅 Victorias por la mínima", st?.porLaMinima ?? 0],
+        ["🩸 Vidas perdidas por partida", fmt(st?.vidasPorPartida ?? null)],
       ],
     },
   ];

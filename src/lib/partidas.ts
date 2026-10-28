@@ -31,7 +31,7 @@ export const GAME_COLORS: { hex: string; name: string }[] = [
   { hex: "#2b2b2b", name: "Negro" },
 ];
 
-export type Partida = { id: string; started_at: string; ended_at: string | null; start_lives: number; kind?: JornadaKind; cancelada?: boolean };
+export type Partida = { id: string; started_at: string; ended_at: string | null; start_lives: number; kind?: JornadaKind; cancelada?: boolean; en_liga?: boolean };
 
 export type PartidaJugador = {
   id: string;

@@ -27,8 +27,9 @@ export type SeatResumen = PartidaJugador & {
   lives: number;
   minLives: number; // 0 = llegó a vida cero
   lost: number;
-  thrown: number; // piscinas lanzadas
-  received: number; // piscinas recibidas
+  thrown: number; // piscinas lanzadas (a otros)
+  received: number; // piscinas recibidas (de otros)
+  autos: number; // autopiscinas: se la tiró él mismo
   gained: number;
   outAt: number | null;
   place: number;
@@ -92,8 +93,9 @@ export function resumir(
           lost: mine.reduce((s, m) => s + Math.max(0, -m.delta), 0),
           gained: mine.reduce((s, m) => s + Math.max(0, m.delta), 0),
           outAt: lives < 0 ? Date.parse(mine.at(-1)!.created_at) : null,
-          thrown: moves.filter((m) => m.kind === "piscina" && m.from_jugador_id === j.id).length,
-          received: mine.filter((m) => m.kind === "piscina").length,
+          thrown: moves.filter((m) => m.kind === "piscina" && m.from_jugador_id === j.id && m.jugador_id !== j.id).length,
+          received: mine.filter((m) => m.kind === "piscina" && m.from_jugador_id !== j.id).length,
+          autos: mine.filter((m) => m.kind === "piscina" && m.from_jugador_id === j.id).length,
           place: 0,
           points: null as number | null,
           moves: mine,
@@ -147,6 +149,11 @@ export type PlayerStats = {
   thrown: number;
   received: number;
   zeroWins: number; // victorias desde la vida cero
+  vidasAlGanar: number | null; // media de vidas con las que gana: alto = gana sobrado
+  maxVidasGanando: number | null; // su victoria más holgada
+  porLaMinima: number; // victorias con 1 vida o en vida cero
+  vidasPorPartida: number | null; // media de vidas perdidas
+  autosJuego: number; // autopiscinas en partidas
   juegoPts: number;
   // liga
   jornadas: number;
@@ -179,6 +186,8 @@ export function playerStats(opts: {
   range: Range;
 }): PlayerStats[] {
   const { players, jornadas, results, events, resumenes, live = [], range } = opts;
+  // Las partidas que ya son jornada tienen sus piscinas también en la liga: en los totales no se cuentan dos veces
+  const fuera = (s: { liga: boolean }) => !s.liga;
   const regulars = players
     .filter((p) => p.active && !p.is_wildcard)
     .sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99) || a.nickname.localeCompare(b.nickname));
@@ -205,8 +214,10 @@ export function playerStats(opts: {
   if (anyWild) keys.set(WILDCARD, { name: WILDCARD_NAME, color: "var(--muted)" });
 
   return [...keys].map(([key, { name, color }]) => {
-    const seats = resumenes.flatMap((r) => r.seats.filter((s) => s.key === key).map((s) => ({ s, n: r.seats.length, id: r.partida.id })));
-    const liveSeats = live.flatMap((r) => r.seats.filter((s) => s.key === key).map((s) => ({ s })));
+    const seats = resumenes.flatMap((r) =>
+      r.seats.filter((s) => s.key === key).map((s) => ({ s, n: r.seats.length, id: r.partida.id, liga: Boolean(r.partida.en_liga) })),
+    );
+    const liveSeats = live.flatMap((r) => r.seats.filter((s) => s.key === key).map((s) => ({ s, liga: false })));
     const res = myResults.filter((r) => group(r.player_id) === key);
     const ev = myEvents.filter((e) => group(e.player_id) === key);
     const sum = (kind: LeagueEvent["kind"]) => ev.filter((e) => e.kind === kind).reduce((t, e) => t + e.value, 0);
@@ -215,6 +226,13 @@ export function playerStats(opts: {
       .reduce((t, e) => t + e.value, 0);
     const thrown = [...seats, ...liveSeats].reduce((t, { s }) => t + s.thrown, 0);
     const received = [...seats, ...liveSeats].reduce((t, { s }) => t + s.received, 0);
+    const autosJuego = [...seats, ...liveSeats].reduce((t, { s }) => t + s.autos, 0);
+    // Para los totales (liga + modo juego), solo las partidas que no han pasado a la liga
+    const soloJuego = [...seats, ...liveSeats].filter(fuera);
+    const thrownExtra = soloJuego.reduce((t, { s }) => t + s.thrown, 0);
+    const receivedExtra = soloJuego.reduce((t, { s }) => t + s.received, 0);
+    const autosExtra = soloJuego.reduce((t, { s }) => t + s.autos, 0);
+    const ganadas = seats.filter(({ s }) => s.place === 1).map(({ s }) => Math.max(0, s.lives));
     const juego = streaks(seats.map(({ s }) => s.place === 1));
     const liga = streaks(res.map((r) => r.position === 1));
     const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
@@ -234,6 +252,11 @@ export function playerStats(opts: {
       received,
       juegoPts: seats.reduce((t, { s }) => t + (s.points ?? 0), 0),
       zeroWins: seats.filter(({ s }) => s.place === 1 && s.minLives === 0).length,
+      vidasAlGanar: avg(ganadas),
+      maxVidasGanando: ganadas.length ? Math.max(...ganadas) : null,
+      porLaMinima: ganadas.filter((v) => v <= 1).length,
+      vidasPorPartida: avg(seats.map(({ s }) => s.lost)),
+      autosJuego,
       jornadas: res.length,
       jornadaWins: res.filter((r) => r.position === 1).length,
       podios: res.filter((r) => r.position <= 3).length,
@@ -249,11 +272,11 @@ export function playerStats(opts: {
       bestJornadaStreak: liga.best,
       piscinas: sum("piscina"),
       recibidas,
-      autopiscinas: sum("autopiscina"),
+      autopiscinas: sum("autopiscina") + autosExtra,
       historia: sum("historia"),
-      pisDadas: sum("piscina") + thrown,
-      pisRecibidas: recibidas + received,
-      pisBalance: sum("piscina") + thrown - (recibidas + received),
+      pisDadas: sum("piscina") + thrownExtra,
+      pisRecibidas: recibidas + receivedExtra,
+      pisBalance: sum("piscina") + thrownExtra - (recibidas + receivedExtra),
     };
   });
 }
@@ -337,6 +360,8 @@ export function records(stats: PlayerStats[], resumenes: Resumen[]): Record[] {
   top((s) => s.received, "💧", "Más piscinas recibidas en partidas", (n) => `${n}`);
   top((s) => s.zeroWins, "0️⃣", "Más victorias desde la vida cero", (n) => `${n}`);
   top((s) => s.historia, "📜", "Más puntos de historia", (n) => `${n}`);
+  top((s) => s.autopiscinas, "🤦", "Más autopiscinas", (n) => `${n}`);
+  top((s) => s.porLaMinima, "😅", "Más victorias por la mínima", (n) => `${n} con 1 vida o en vida cero`);
 
   const won = resumenes.filter((r) => r.winner);
   // Remontada: el ganador llegó a estar por debajo de con lo que acabó
@@ -347,6 +372,9 @@ export function records(stats: PlayerStats[], resumenes: Resumen[]): Record[] {
     out.push({ icon: "🧟", title: "Mayor remontada", who: comeback.winner!.name, value: `ganó tras quedarse en ${plural(comeback.winner!.minLives)}` });
   const paliza = won.toSorted((a, b) => b.winner!.lives - a.winner!.lives)[0];
   if (paliza) out.push({ icon: "💪", title: "Victoria más holgada", who: paliza.winner!.name, value: `acabó con ${plural(paliza.winner!.lives)}` });
+  const apurada = won.toSorted((a, b) => a.winner!.lives - b.winner!.lives)[0];
+  if (apurada && apurada !== paliza)
+    out.push({ icon: "😰", title: "Victoria más apurada", who: apurada.winner!.name, value: apurada.winner!.lives <= 0 ? "ganó en vida cero" : `acabó con ${plural(apurada.winner!.lives)}` });
   const done = resumenes.filter((r) => !r.live);
   const long = done.toSorted((a, b) => b.endAt - b.startAt - (a.endAt - a.startAt))[0];
   if (long) out.push({ icon: "⏳", title: "Partida más larga", who: dayOf(long.partida.started_at), value: fmtMin(long.endAt - long.startAt) });
@@ -366,7 +394,7 @@ export function splashes(resumenes: Resumen[]): Splash[] {
       if (m.kind !== "piscina" || !m.from_jugador_id) continue;
       const from = byId.get(m.from_jugador_id);
       const to = byId.get(m.jugador_id);
-      if (!from || !to) continue;
+      if (!from || !to || from.id === to.id) continue; // autopiscinas aparte
       const k = `${from.key}>${to.key}`;
       out.set(k, { from, to, n: (out.get(k)?.n ?? 0) + 1 });
     }
@@ -385,7 +413,7 @@ export function allSplashes(resumenes: Resumen[], events: LeagueEvent[], stats: 
     const k = `${a.key}>${b.key}`;
     out.set(k, { from: a, to: b, n: (out.get(k)?.n ?? 0) + n });
   };
-  for (const p of splashes(resumenes)) add(who.get(p.from.key) ?? p.from, who.get(p.to.key) ?? p.to, p.n);
+  for (const p of splashes(resumenes.filter((r) => !r.partida.en_liga))) add(who.get(p.from.key) ?? p.from, who.get(p.to.key) ?? p.to, p.n);
   for (const e of events) {
     if (e.kind !== "piscina" || !e.target_player_id) continue;
     if (!inRange(eventDay(e, day), range)) continue;

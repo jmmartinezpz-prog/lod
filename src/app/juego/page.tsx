@@ -614,7 +614,7 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
     apply(victim.id, {
       ...next,
       secadas: { ...next.secadas, [victim.id]: (next.secadas[victim.id] ?? 0) + 1 },
-      tiradas: { ...next.tiradas, [thrower.id]: (next.tiradas[thrower.id] ?? 0) + 1 },
+      tiradas: thrower.id === victim.id ? next.tiradas : { ...next.tiradas, [thrower.id]: (next.tiradas[thrower.id] ?? 0) + 1 },
     });
     setSecado({ thrower, victim });
     clearTimeout(timers.current.secado);
@@ -789,10 +789,12 @@ function Board({ game, update, onFinished }: { game: Game; update: Update; onFin
             className="animate-splash w-full max-w-sm space-y-2 rounded-3xl p-6 text-center text-white shadow-2xl"
             style={{ background: tileBg(secado.victim.color), containerType: "inline-size" }}
           >
-            <p className="text-7xl">🏊💦</p>
+            <p className="text-7xl">{secado.thrower.id === secado.victim.id ? "🤦💦" : "🏊💦"}</p>
             <FitName name={secado.victim.name} max={14} className="text-[2rem] font-bold [text-shadow:0_2px_10px_rgba(0,0,0,.4)]" />
-            <p className="text-2xl font-extrabold [text-shadow:0_2px_10px_rgba(0,0,0,.4)]">¡Te acaban de secar!</p>
-            <p className="text-sm font-medium opacity-90">Piscina de {secado.thrower.name}</p>
+            <p className="text-2xl font-extrabold [text-shadow:0_2px_10px_rgba(0,0,0,.4)]">
+              {secado.thrower.id === secado.victim.id ? "¡Autopiscina! Te has secado tú solito" : "¡Te acaban de secar!"}
+            </p>
+            {secado.thrower.id !== secado.victim.id && <p className="text-sm font-medium opacity-90">Piscina de {secado.thrower.name}</p>}
           </div>
         </div>
       )}
@@ -853,6 +855,9 @@ function PiscinaPicker({ seat, seats, onPick, onClose }: {
             ))}
           </div>
         )}
+        <button onClick={() => onPick(seat, seat)} className="w-full py-1.5 text-sm text-muted underline">
+          🤦 Autopiscina: se la tira {seat.name} solito
+        </button>
         <button onClick={onClose} className="w-full rounded-xl border border-line py-3 font-semibold text-muted">Cancelar</button>
       </div>
     </div>
