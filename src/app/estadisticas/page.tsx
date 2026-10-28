@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Status } from "@/components/Status";
 import { LivesChart } from "@/components/LivesChart";
 import { ProgressChart } from "@/components/ProgressChart";
-import { leagueHistory, regularsOf } from "@/lib/history";
+import { historyIn, leagueHistory, regularsOf } from "@/lib/history";
 import { useLeague } from "@/lib/useLeague";
 import { usePartidas } from "@/lib/partidas";
-import { allSplashes, dayOf, inRange, playerStats, records, resumir, type PlayerStats, type Range, type Resumen } from "@/lib/stats";
+import { allSplashes, dayOf, inRange, leagueRecords, playerStats, records, resumir, type PlayerStats, type Range, type Resumen } from "@/lib/stats";
 
 type Preset = "todo" | "hoy" | "7" | "30" | "mes" | "fechas";
 const PRESETS: { id: Preset; label: string }[] = [
@@ -78,7 +78,10 @@ export default function Estadisticas() {
     live: enRango.filter((r) => r.live),
     range,
   });
-  const recs = records(stats, terminadas);
+  const periodo = historyIn(history, (d) => inRange(d, range));
+  const recs = [...leagueRecords(periodo), ...records(stats, terminadas)];
+  const filtrando = Boolean(range.from || range.to);
+  const sinFecha = league.jornadas.filter((j) => !j.played_on).length;
   const pairs = allSplashes(enRango, league.events, stats, range, league.jornadas);
   const jornadasEnRango = league.jornadas.filter((j) => inRange(j.played_on, range)).length;
   const sum = (pick: (s: PlayerStats) => number) => stats.reduce((t, s) => t + pick(s), 0);
@@ -123,6 +126,13 @@ export default function Estadisticas() {
         )}
       </section>
 
+      {filtrando && sinFecha > 0 && (
+        <p className="rounded-xl border border-gold/50 bg-gold/10 p-3 text-sm">
+          📅 Hay <b>{sinFecha} jornadas sin fecha</b> que no entran al filtrar por fechas. Ponle la fecha a cada día en la pestaña{" "}
+          <a href="/jornadas" className="font-semibold text-gold underline">Jornadas</a> y saldrán aquí.
+        </p>
+      )}
+
       {/* Resumen */}
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Tile icon="⚔️" label="Partidas" value={terminadas.length} />
@@ -132,17 +142,35 @@ export default function Estadisticas() {
       </section>
 
       <Card title="📈 Progreso de la liga">
-        <ProgressChart history={history} focus={focus} onFocus={setFocus} />
+        <ProgressChart history={periodo} focus={focus} onFocus={setFocus} />
         <p className="mt-2 text-xs text-muted">Toca o pasa el ratón por la gráfica para ver cada jornada · D = inicio de cada día · toca un nombre para resaltarlo</p>
       </Card>
 
       <Individual
-        history={history}
+        history={periodo}
         stats={stats}
         standings={league.standings.map((s) => ({ key: s.player.id, points: s.points }))}
         focus={focus ?? league.standings[0]?.player.id ?? null}
         onFocus={setFocus}
       />
+
+      {/* Récords */}
+      {recs.length > 0 && (
+        <Card title="🏅 Récords">
+          <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {recs.map((r) => (
+              <li key={r.title} className="flex items-center gap-3 rounded-xl bg-felt p-3">
+                <span className="text-2xl">{r.icon}</span>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted">{r.title}</p>
+                  <p className="font-bold leading-tight">{r.who}</p>
+                  <p className="text-xs text-muted">{r.value}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {juego.error && (
         <p className="rounded-lg border border-red/50 bg-red/10 p-3 text-sm text-red">
@@ -259,23 +287,6 @@ export default function Estadisticas() {
         </Card>
       )}
 
-      {/* Récords */}
-      {recs.length > 0 && (
-        <Card title="🏅 Récords">
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {recs.map((r) => (
-              <li key={r.title} className="flex items-center gap-3 rounded-xl bg-felt p-3">
-                <span className="text-2xl">{r.icon}</span>
-                <div className="min-w-0">
-                  <p className="text-xs text-muted">{r.title}</p>
-                  <p className="font-bold leading-tight">{r.who}</p>
-                  <p className="text-xs text-muted">{r.value}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
 
       {/* Tablas completas */}
       <Card title="⚔️ Modo juego">
@@ -489,12 +500,12 @@ function Individual({ history, stats, standings, focus, onFocus }: {
   const pos = standings.findIndex((s) => s.key === who.key);
   const pts = standings[pos]?.points ?? 0;
   const ahead = standings[pos - 1];
-  const totalJ = history.snapshots.length - 1;
-  const totalD = new Set(history.snapshots.map((s) => s.diaNumber).filter((d) => d !== null)).size;
+  const totalJ = history.jornadas;
+  const totalD = history.dias;
 
   const groups: { title: string; items: [string, string | number][] }[] = [
     {
-      title: "👑 Liderato (histórico)",
+      title: "👑 Liderato",
       items: [
         ["Jornadas como líder", `${lead.jornadasLider} de ${totalJ}`],
         ["Días como líder", `${lead.diasLider} de ${totalD}`],
@@ -502,6 +513,9 @@ function Individual({ history, stats, standings, focus, onFocus }: {
         ["Líder ahora", lead.liderDesde ? `desde J${lead.liderDesde}` : "no"],
         ["Mejor puesto", lead.mejorPuesto ? `${lead.mejorPuesto}º` : "–"],
         ["Peor puesto", lead.peorPuesto ? `${lead.peorPuesto}º` : "–"],
+        ["Mayor ventaja de líder", lead.maxVentaja ? `+${lead.maxVentaja.pts} (J${lead.maxVentaja.jornada})` : "–"],
+        ["Jornadas último 🏮", `${lead.jornadasUltimo} de ${totalJ}`],
+        ["Días último 🏮", `${lead.diasUltimo} de ${totalD}`],
       ],
     },
     {
@@ -581,7 +595,7 @@ function Individual({ history, stats, standings, focus, onFocus }: {
           </div>
         ))}
       </div>
-      <p className="mt-3 text-xs text-muted">El liderato es de toda la liga; el resto sigue el filtro de fechas.</p>
+      <p className="mt-3 text-xs text-muted">Todo sigue el filtro de fechas. El liderato se mide con la clasificación acumulada de toda la liga en cada jornada del periodo.</p>
     </Card>
   );
 }

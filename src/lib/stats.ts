@@ -1,6 +1,7 @@
 import type { Movimiento, Partida, PartidaJugador } from "./partidas";
 import { PALETTE, pointsFor } from "./partidas";
 import type { Jornada, LeagueEvent, Player, Result } from "./types";
+import type { LeagueHistory, Leadership } from "./history";
 
 // Una partida sin movimientos desde hace tanto se da por terminada
 const LIVE_WINDOW = 3 * 60 * 60 * 1000;
@@ -8,7 +9,13 @@ const LIVE_WINDOW = 3 * 60 * 60 * 1000;
 export const dayOf = (iso: string) => new Date(iso).toLocaleDateString("sv-SE"); // yyyy-mm-dd local
 
 export type Range = { from: string | null; to: string | null };
-export const inRange = (day: string, r: Range) => (!r.from || day >= r.from) && (!r.to || day <= r.to);
+// Lo que no tiene fecha (jornadas de días sin fechar) solo entra cuando no se filtra
+export const inRange = (day: string | null | undefined, r: Range) =>
+  day ? (!r.from || day >= r.from) && (!r.to || day <= r.to) : !r.from && !r.to;
+
+// Fecha de un evento: la de su jornada si tiene (aunque esté sin fechar), si no la de cuando se apuntó
+export const eventDay = (e: { jornada_id: string | null; created_at: string }, jornadaDay: Map<string, string | null>) =>
+  e.jornada_id ? jornadaDay.get(e.jornada_id) ?? null : dayOf(e.created_at);
 
 export type SeatResumen = PartidaJugador & {
   key: string;
@@ -171,12 +178,12 @@ export function playerStats(opts: {
   const label = (p: Player) => `${p.emoji ? `${p.emoji} ` : ""}${p.nickname}`;
 
   const jornadaById = new Map(jornadas.filter((j) => inRange(j.played_on, range)).map((j) => [j.id, j]));
-  const jornadaDay = new Map(jornadas.map((j) => [j.id, j.played_on]));
+  const jornadaDay = new Map(jornadas.map((j) => [j.id, j.played_on as string | null]));
   const myResults = results
     .filter((r) => jornadaById.has(r.jornada_id))
     .sort((a, b) => jornadaById.get(a.jornada_id)!.number - jornadaById.get(b.jornada_id)!.number);
   const myEvents = events.filter((e) =>
-    inRange((e.jornada_id && jornadaDay.get(e.jornada_id)) || dayOf(e.created_at), range),
+    inRange(eventDay(e, jornadaDay), range),
   );
 
   const keys = new Map<string, { name: string; color: string }>();
@@ -238,6 +245,34 @@ export function playerStats(opts: {
 const plural = (n: number) => `${n} ${n === 1 ? "vida" : "vidas"}`;
 
 export type Record = { icon: string; title: string; who: string; value: string };
+
+// Récords de la clasificación: liderato y farolillo rojo (empates: salen todos)
+export function leagueRecords(h: LeagueHistory): Record[] {
+  if (!h.jornadas) return [];
+  const name = new Map(h.series.map((s) => [s.key, s.name]));
+  const all = [...h.leadership.values()];
+  const names = (ls: Leadership[]) => ls.map((l) => name.get(l.key)).join(" y ");
+  const out: Record[] = [];
+  const top = (pick: (l: Leadership) => number, icon: string, title: string, unit: (n: number) => string) => {
+    const max = Math.max(...all.map(pick));
+    if (max > 0) out.push({ icon, title, who: names(all.filter((l) => pick(l) === max)), value: unit(max) });
+  };
+  const j = (n: number) => `${n} ${n === 1 ? "jornada" : "jornadas"}`;
+  const d = (n: number) => `${n} ${n === 1 ? "día" : "días"}`;
+
+  top((l) => l.diasLider, "📅", "Más días como líder", (n) => `${d(n)} de ${h.dias}`);
+  top((l) => l.jornadasLider, "👑", "Más jornadas como líder", (n) => `${j(n)} de ${h.jornadas}`);
+  top((l) => l.mejorRacha, "⛓️", "Racha más larga de líder", (n) => `${j(n)} seguidas`);
+  const ventaja = all.filter((l) => l.maxVentaja).toSorted((a, b) => b.maxVentaja!.pts - a.maxVentaja!.pts)[0];
+  if (ventaja) out.push({ icon: "🚀", title: "Mayor ventaja siendo líder", who: name.get(ventaja.key)!, value: `+${ventaja.maxVentaja!.pts} pts en J${ventaja.maxVentaja!.jornada}` });
+  top((l) => l.diasUltimo, "🏮", "Farolillo rojo: más días último", (n) => d(n));
+  top((l) => l.jornadasUltimo, "🐢", "Más jornadas en último puesto", (n) => j(n));
+  const nunca = all.filter((l) => l.jornadasLider === 0 && l.mejorPuesto !== null);
+  if (nunca.length) out.push({ icon: "🙈", title: "Nunca ha ido líder", who: names(nunca), value: `mejor puesto: ${nunca.map((l) => `${l.mejorPuesto}º`).join(" / ")}` });
+  const nuncaUlt = all.filter((l) => l.jornadasUltimo === 0 && l.mejorPuesto !== null);
+  if (nuncaUlt.length) out.push({ icon: "🛡️", title: "Nunca ha ido último", who: names(nuncaUlt), value: "ni una jornada" });
+  return out;
+}
 
 export function records(stats: PlayerStats[], resumenes: Resumen[]): Record[] {
   const out: Record[] = [];
@@ -310,7 +345,7 @@ export function allSplashes(resumenes: Resumen[], events: LeagueEvent[], stats: 
   for (const p of splashes(resumenes)) add(who.get(p.from.key) ?? p.from, who.get(p.to.key) ?? p.to, p.n);
   for (const e of events) {
     if (e.kind !== "piscina" || !e.target_player_id) continue;
-    if (!inRange((e.jornada_id && day.get(e.jornada_id)) || dayOf(e.created_at), range)) continue;
+    if (!inRange(eventDay(e, day), range)) continue;
     const a = who.get(e.player_id) ?? who.get(WILDCARD);
     const b = who.get(e.target_player_id) ?? who.get(WILDCARD);
     if (a && b) add(a, b, e.value);
