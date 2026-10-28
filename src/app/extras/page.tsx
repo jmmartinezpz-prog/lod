@@ -33,9 +33,11 @@ function Panel() {
 
   const isAdjustment = kind === "sancion" || kind === "bonus" || kind === "alta";
   const byId = new Map(players.map((p) => [p.id, p.nickname]));
+  // Solo se sanciona a los fijos de la liga, nunca a un wildcard
+  const fijos = players.filter((p) => !p.is_wildcard && p.active).sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99) || a.nickname.localeCompare(b.nickname));
 
   async function save() {
-    const player_id = player || players[0]?.id;
+    const player_id = player || fijos[0]?.id;
     if (!player_id) return;
     if (!confirm(`¿Sancionar a ${byId.get(player_id)} con −${Math.abs(value)}?\n\nNo se podrá quitar.`)) return;
     const { error } = isAdjustment
@@ -69,7 +71,7 @@ function Panel() {
       </div>
       <div className="space-y-3 rounded-xl border border-line bg-card p-4">
         <select value={player} onChange={(e) => setPlayer(e.target.value)}>
-          {players.map((p) => <option key={p.id} value={p.id}>{p.nickname}</option>)}
+          {fijos.map((p) => <option key={p.id} value={p.id}>{p.nickname}</option>)}
         </select>
         <div className="grid grid-cols-2 gap-3">
           <select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>

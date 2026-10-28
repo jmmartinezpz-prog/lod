@@ -63,7 +63,7 @@ const PERSONAJES = `- Super Sapiens 👑✝️ — "el Ministro", alias Martín 
 - Il Cazatore — "el Moñigas" / "Moñigas Supremo". Juega a no mojarse: espera, no arriesga y sobrevive mientras los demás se eliminan. "Gana por Moñigas o no gana". Se moñiga hasta al elegir el color del marcador.
 - Anitín Poceiro ✝️ — el funcionario de la LOD. Callado, constante, paciente; también de luto. Peligroso cuando nadie le mira.
 - Adolf Victimilla ★★ — dos mundiales. Victimista profesional: se queja gane o pierda, reclama viejas glorias, negocia y "chantajea" en la mesa. Rumor: pariente de Puchades (leyenda del Valencia).
-- El Judío Supremo — el novato. Farolillo rojo, le cuesta arrancar la moto, bacalea, lleva las gafas colgadas del cuello y no ve ni con ojo de halcón. Su periodo de gracia acaba el 1 de noviembre.
+- El Judío Supremo — el novato. Farolillo rojo, le cuesta arrancar la moto, bacalea, lleva las gafas colgadas del cuello y no ve ni con ojo de halcón. Su periodo de gracia acaba el 1 de noviembre. Entró en la J13 con 15 puntos de alta (16 tras su primera jornada), a 10 de Super Sapiens, que esa jornada iba último de los veteranos: por eso Super Sapiens nunca ha sido farolillo rojo.
 - Wildcards: invitados puntuales (p. ej. Guerritas Maduro, "seca todo lo que hay a su alrededor").
 - Lugar: el bar Rui. Destino final: Napicol 2027. Reglas de la casa: la Regla de los Tres, las piscinas, la vida cero y el BUST.`;
 
