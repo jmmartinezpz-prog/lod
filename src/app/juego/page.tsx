@@ -221,7 +221,7 @@ function Summary({ game, liga, onRetry, onClose }: { game: Game; liga: Liga | nu
 }
 
 function Setup({ onStart }: { onStart: (g: Game) => void }) {
-  const { players, loading, error } = useLeague();
+  const { players, standings, loading, error } = useLeague();
   const [start, setStart] = useState(NORMAL);
   const [kind, setKind] = useState<JornadaKind>("normal");
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
@@ -244,12 +244,17 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
     .filter((p) => p.active && !p.is_wildcard)
     .sort((a, b) => (a.seat_order ?? 99) - (b.seat_order ?? 99) || a.nickname.localeCompare(b.nickname))
     .map((p) => ({ id: p.id, name: playerLabel(p) }));
-  // Como nos sentamos la última vez; los que no estaban, detrás
+  // En pantalla, por la clasificación de ahora (👑 primero, 🕳️ al final, wildcards detrás)
+  const puesto = (id: string) => {
+    const i = standings.findIndex((s) => s.player.id === id);
+    return i < 0 ? 999 : i;
+  };
+  // En la partida, como nos sentamos la última vez; los que no estaban, detrás
   const pos = (id: string) => {
     const i = orden.indexOf(id);
     return i < 0 ? 999 : i;
   };
-  const candidates = [...regulars, ...wildcards].map((c, i) => ({ c, i })).sort((a, b) => pos(a.c.id) - pos(b.c.id) || a.i - b.i).map(({ c }) => c);
+  const candidates = [...regulars, ...wildcards].map((c, i) => ({ c, i })).sort((a, b) => puesto(a.c.id) - puesto(b.c.id) || a.i - b.i).map(({ c }) => c);
   const seated = candidates.filter((c) => !excluded.has(c.id));
   // Los colores no dependen de dónde se siente cada uno: orden fijo de la liga, y los elegidos se recuerdan
   const elegidos = {
@@ -310,7 +315,10 @@ function Setup({ onStart }: { onStart: (g: Game) => void }) {
       newGame(
         start,
         kind,
-        seated.map((c) => ({ playerId: c.id.startsWith("wc-") ? null : c.id, name: c.name, color: color(c.id) })),
+        seated
+          .map((c, i) => ({ c, i }))
+          .sort((a, b) => pos(a.c.id) - pos(b.c.id) || a.i - b.i)
+          .map(({ c }) => ({ playerId: c.id.startsWith("wc-") ? null : c.id, name: c.name, color: color(c.id) })),
       ),
     );
   }
