@@ -8,7 +8,6 @@ import { ARCHIVO, PLANTILLA, htmlDe, promptDelDia, tituloDe, usePeriodicos, type
 import { dayOf, gameToday, resumir } from "@/lib/stats";
 import { supabase } from "@/lib/supabase";
 import { useLeague } from "@/lib/useLeague";
-import { useSession } from "@/lib/useSession";
 import { MeterLlave, QuienApunta } from "@/components/Llave";
 import { usePermiso } from "@/lib/llave";
 
@@ -28,7 +27,7 @@ export default function Prensa() {
   const league = useLeague();
   const juego = usePartidas();
   const { todos, error: prensaError, reload } = usePeriodicos();
-  const { session } = useSession();
+  const permiso = usePermiso();
   const [abierto, setAbierto] = useState<Periodico | null>(null);
 
   return (
@@ -67,7 +66,7 @@ export default function Prensa() {
       {abierto && (
         <Visor
           periodico={abierto}
-          puedeBorrar={Boolean(session) && !abierto.src}
+          puedeBorrar={permiso.puede && !abierto.src}
           onClose={() => setAbierto(null)}
           onBorrado={() => {
             setAbierto(null);

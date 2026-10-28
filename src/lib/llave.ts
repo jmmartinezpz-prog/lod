@@ -13,9 +13,15 @@ export type Permiso = {
 
 const EVENTO = "lod-llave";
 
+// Se puede teclear sin guiones, sin "LOD" y en minúsculas: "k7qm2xpa" → "LOD-K7QM-2XPA"
+export function normalizarLlave(code: string) {
+  const s = code.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^LOD/, "");
+  return "LOD-" + (s.match(/.{1,4}/g) ?? []).join("-");
+}
+
 export function guardarLlave(code: string | null) {
   try {
-    if (code) localStorage.setItem(LLAVE_KEY, code.trim().toUpperCase());
+    if (code) localStorage.setItem(LLAVE_KEY, normalizarLlave(code));
     else localStorage.removeItem(LLAVE_KEY);
   } catch {}
   window.dispatchEvent(new Event(EVENTO));

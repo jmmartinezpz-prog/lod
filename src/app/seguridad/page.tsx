@@ -30,7 +30,7 @@ const OP = { INSERT: "➕", UPDATE: "✏️", DELETE: "🗑" };
 
 export default function Seguridad() {
   return (
-    <AdminGate>
+    <AdminGate soloAdmin>
       <Panel />
     </AdminGate>
   );
@@ -94,7 +94,7 @@ function Llaves() {
     <section className="space-y-3 rounded-2xl border border-line bg-card p-4">
       <div>
         <h2 className="font-bold">🔑 Llaves</h2>
-        <p className="text-sm text-muted">Una por persona. Con ella su móvil puede apuntar partidas, anularlas y subir periódicos. La liga solo la tocas tú.</p>
+        <p className="text-sm text-muted">Una por persona. Con ella su móvil puede apuntarlo todo: jornadas, extras, partidas y periódicos. Este panel solo lo ves tú.</p>
       </div>
 
       {nueva && (
