@@ -56,7 +56,6 @@ const TABS: { id: Tab; label: string; sub: string }[] = [
   { id: "piscinas", label: "🏊 Piscinas", sub: "palmarés y quién a quién" },
   { id: "records", label: "🏅 Récords", sub: "lo mejor y lo peor" },
 ];
-const TAB_KEY = "lod-stats-tab";
 
 export default function Estadisticas() {
   const league = useLeague();
@@ -66,20 +65,7 @@ export default function Estadisticas() {
   const [preset, setPreset] = useState<Preset>("todo");
   const [custom, setCustom] = useState<Range>({ from: null, to: null });
   const [selected, setSelected] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("liga");
-  useEffect(() => {
-    try {
-      const t = localStorage.getItem(TAB_KEY) as Tab | null;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (t && TABS.some((x) => x.id === t)) setTab(t);
-    } catch {}
-  }, []);
-  function elegirTab(t: Tab) {
-    setTab(t);
-    try {
-      localStorage.setItem(TAB_KEY, t);
-    } catch {}
-  }
+  const [tab, elegirTab] = useState<Tab>("liga"); // siempre se abre en Liga
   const range = presetRange(preset, custom, now);
 
   const todas = useMemo(
