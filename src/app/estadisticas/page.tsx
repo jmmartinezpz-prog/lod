@@ -214,7 +214,6 @@ export default function Estadisticas() {
           <ProgressChart history={periodo} focus={focus} onFocus={setFocus} />
           <p className="mt-2 text-xs text-muted">Toca o pasa el ratón por la gráfica para ver cada jornada · D = inicio de cada día · toca un nombre para resaltarlo</p>
         </Card>
-        <Constancia history={history} adjustments={league.adjustments} jornadas={league.jornadas} />
 
         <Puestos stats={stats} />
         <CaraACara finales={fin} yo={permiso.jugador} />
@@ -243,6 +242,7 @@ export default function Estadisticas() {
           stats={stats}
           range={range}
         />
+        <Constancia history={history} adjustments={league.adjustments} jornadas={league.jornadas} />
         </>
       )}
 
@@ -860,7 +860,7 @@ function CaraACara({ finales, yo }: { finales: Final[]; yo: string | null }) {
   );
 }
 
-// Para que conste: cómo entró cada fichaje y a quién libró del último puesto (sale de los datos)
+// Para que conste: con cuántos puntos entró cada fichaje y a cuánto del último (sale de los datos)
 function Constancia({ history, adjustments, jornadas }: {
   history: ReturnType<typeof leagueHistory>;
   adjustments: ReturnType<typeof useLeague>["adjustments"];
@@ -873,30 +873,22 @@ function Constancia({ history, adjustments, jornadas }: {
       const j = jornadas.find((x) => x.id === a.jornada_id);
       const snap = j && history.snapshots.find((s) => s.number === j.number);
       if (!j || !snap || !(a.player_id in snap.totals)) return [];
-      const total = snap.totals[a.player_id];
       const otros = Object.keys(snap.ranks).filter((k) => k !== a.player_id);
       const min = Math.min(...otros.map((k) => snap.totals[k]));
-      const salvados = otros.filter((k) => snap.totals[k] === min);
-      const nunca = salvados.filter((k) => history.leadership.get(k)?.jornadasUltimo === 0);
-      return [{ a, j, total, min, salvados, nunca }];
+      return [{ a, j, gap: min - snap.totals[a.player_id], cerca: otros.filter((k) => snap.totals[k] === min) }];
     });
   if (!notas.length) return null;
   return (
     <Card title="📌 Para que conste">
       <ul className="space-y-2 text-sm">
-        {notas.map(({ a, j, total, min, salvados, nunca }) => (
+        {notas.map(({ a, j, gap, cerca }) => (
           <li key={a.id} className="rounded-xl bg-felt p-3 leading-relaxed">
-            En la <b>J{j.number}</b> entra <b><Starred name={nombre.get(a.player_id) ?? "?"} /></b> en la liga con <b>{a.points} puntos</b> de alta
-            {total !== a.points && <> ({total} tras su primera jornada)</>}, a <b>{min - total} puntos</b> de{" "}
-            {salvados.map((k, i) => (
+            En la <b>J{j.number}</b> entra <b><Starred name={nombre.get(a.player_id) ?? "?"} /></b> con <b>{a.points} puntos</b> de alta, a{" "}
+            <b>{gap} puntos</b> de{" "}
+            {cerca.map((k, i) => (
               <span key={k}>{i > 0 && " y "}<Starred name={nombre.get(k) ?? "?"} /></span>
             ))}
-            , que sin su llegada habría{salvados.length > 1 ? "n" : ""} acabado esa jornada en último lugar.
-            {nunca.length > 0 && (
-              <> Por eso {nunca.map((k, i) => (
-                <span key={k}>{i > 0 && " y "}<Starred name={nombre.get(k) ?? "?"} /></span>
-              ))} nunca ha{nunca.length > 1 ? "n" : ""} ido último en la general.</>
-            )}
+            .
           </li>
         ))}
       </ul>
